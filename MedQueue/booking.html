@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Подтверждение записи — MedQueue</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config = { theme: { extend: { colors: { brand: '#2563EB' }, boxShadow: { soft: '0 10px 30px rgba(15, 23, 42, 0.07)' } } } }</script>
+</head>
+<body class="min-h-screen bg-[#f5f5f5] text-slate-900 antialiased">
+  <main class="mx-auto min-h-screen max-w-md bg-[#f5f5f5] px-4 pb-8">
+    <header class="flex items-center gap-3 pt-6"><a href="clinic.html" class="text-lg text-slate-500" aria-label="Назад">‹</a><div><p class="text-[11px] font-semibold text-slate-400">КЛИНИКА</p><h1 class="mt-0.5 text-base font-bold">Подтверждение</h1></div></header>
+
+    <section id="booking-form" class="mt-5">
+      <div class="rounded-xl border border-slate-200 bg-white p-4"><div class="flex items-center justify-between border-b border-slate-100 pb-3"><div><h2 class="text-sm font-bold">Smile Clinic</h2><p class="mt-1 text-[11px] text-slate-500">Сегодня в 18:00</p></div><span class="text-xs font-bold text-blue-600">15 000 ₸</span></div><dl class="mt-3 space-y-2 text-xs"><div class="flex justify-between gap-4"><dt class="text-slate-500">Врач</dt><dd class="text-right font-semibold">Анна Петрова</dd></div><div class="flex justify-between gap-4"><dt class="text-slate-500">Услуга</dt><dd class="text-right font-semibold">Лечение кариеса</dd></div></dl></div>
+      <form id="appointment-form" class="mt-5 space-y-3"><div><label for="name" class="mb-1.5 block text-xs font-semibold">Ваше имя</label><input id="name" name="name" type="text" placeholder="Например, Алия" required class="w-full rounded-lg border border-slate-200 bg-white px-3 py-3 text-xs outline-none placeholder:text-slate-400 focus:border-blue-600 focus:ring-2 focus:ring-blue-100"></div><div><label for="phone" class="mb-1.5 block text-xs font-semibold">Номер телефона</label><input id="phone" name="phone" type="tel" placeholder="+7 (___) ___-__-__" required class="w-full rounded-lg border border-slate-200 bg-white px-3 py-3 text-xs outline-none placeholder:text-slate-400 focus:border-blue-600 focus:ring-2 focus:ring-blue-100"></div><button type="submit" class="mt-2 flex w-full items-center justify-center rounded-lg bg-blue-600 px-4 py-3 text-xs font-bold text-white">Подтвердить запись</button><p class="text-center text-[10px] leading-4 text-slate-400">Нажимая на кнопку, вы соглашаетесь с обработкой персональных данных</p></form>
+    </section>
+
+    <section id="success-state" class="hidden pt-24 text-center" aria-live="polite"><div class="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-emerald-100 text-4xl text-emerald-600">✓</div><h2 class="mt-6 text-2xl font-bold">Вы успешно записаны!</h2><p class="mx-auto mt-3 max-w-xs text-sm leading-6 text-slate-500">Ждём вас сегодня в 18:30 в Smile Clinic. Подтверждение отправлено на ваш номер.</p><a href="index.html" class="mt-8 inline-flex w-full items-center justify-center rounded-xl bg-blue-600 px-4 py-3.5 text-sm font-bold text-white shadow-lg shadow-blue-200">На главную</a></section>
+  </main>
+  <script>document.getElementById('appointment-form').addEventListener('submit', function (event) { event.preventDefault(); document.getElementById('booking-form').classList.add('hidden'); document.getElementById('success-state').classList.remove('hidden'); window.scrollTo({ top: 0, behavior: 'smooth' }); });</script>
+</body>
+</html>

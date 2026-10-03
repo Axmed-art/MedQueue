@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Smile Clinic — MedQueue</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config = { theme: { extend: { colors: { brand: '#2563EB' }, boxShadow: { soft: '0 10px 30px rgba(15, 23, 42, 0.07)' } } } }</script>
+</head>
+<body class="min-h-screen bg-[#f5f5f5] text-slate-900 antialiased">
+  <main class="mx-auto min-h-screen max-w-md bg-[#f5f5f5] px-4 pb-8">
+    <header class="flex items-center gap-3 pt-6">
+      <a href="index.html" class="text-lg text-slate-500" aria-label="Назад">‹</a>
+      <div><p class="text-[11px] font-semibold text-slate-400">РЕЗУЛЬТАТЫ</p><h1 class="mt-0.5 text-base font-bold">Smile Clinic</h1></div>
+    </header>
+
+    <section class="mt-5 overflow-hidden rounded-xl border border-slate-200 bg-white">
+      <img src="https://images.unsplash.com/photo-1606811971618-4486d14f3f99?auto=format&fit=crop&w=900&q=80" alt="Интерьер Smile Clinic" class="h-36 w-full object-cover">
+      <div class="p-4"><div class="flex items-center justify-between"><div><p class="text-sm font-bold">Smile Clinic</p><p class="mt-1 text-[11px] text-slate-500">ул. Достык, 40, Алматы · 2.5 км</p><p class="mt-2 text-[11px] font-semibold text-amber-600">★ 4.9 <span class="font-normal text-slate-400">(126 отзывов)</span></p></div><span class="rounded-lg bg-blue-50 px-2 py-1 text-[11px] font-semibold text-blue-600">Открыто</span></div></div>
+    </section>
+
+    <section class="mt-6" aria-labelledby="doctor-title">
+      <h2 id="doctor-title" class="text-base font-bold">О клинике</h2>
+      <div class="mt-3 flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-3"><div class="flex h-10 w-10 items-center justify-center rounded-full bg-blue-50 text-lg">👩🏻‍⚕️</div><div><h3 class="text-sm font-bold">Анна Петрова</h3><p class="mt-1 text-[11px] text-slate-500">Стоматолог-терапевт · стаж 8 лет</p></div></div>
+    </section>
+
+    <section class="mt-6" aria-labelledby="slots-title">
+      <div class="flex items-center justify-between"><h2 id="slots-title" class="text-base font-bold">Свободное время</h2><span class="text-[11px] font-semibold text-blue-600">Сегодня</span></div>
+      <div class="mt-3 grid grid-cols-3 gap-2">
+        <label class="cursor-pointer"><input type="radio" name="appointment-time" value="18:00" class="peer sr-only" checked><span class="block rounded-lg border border-slate-200 bg-white py-2.5 text-center text-xs font-semibold text-slate-700 transition peer-checked:border-blue-600 peer-checked:bg-blue-600 peer-checked:text-white">18:00</span></label>
+        <label class="cursor-pointer"><input type="radio" name="appointment-time" value="19:15" class="peer sr-only"><span class="block rounded-lg border border-slate-200 bg-white py-2.5 text-center text-xs font-semibold text-slate-700 transition peer-checked:border-blue-600 peer-checked:bg-blue-600 peer-checked:text-white">19:15</span></label>
+        <label class="cursor-pointer"><input type="radio" name="appointment-time" value="20:00" class="peer sr-only"><span class="block rounded-lg border border-slate-200 bg-white py-2.5 text-center text-xs font-semibold text-slate-700 transition peer-checked:border-blue-600 peer-checked:bg-blue-600 peer-checked:text-white">20:00</span></label>
+      </div>
+    </section>
+
+    <div class="mt-6 rounded-xl border border-slate-200 bg-white p-3"><div class="flex items-center justify-between"><div><p class="text-[11px] text-slate-400">Выбрано время</p><p class="mt-1 text-sm font-bold">Сегодня, 18:00</p></div><a href="booking.html" class="rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white">Записаться · 15 000 ₸</a></div></div>
+  </main>
+</body>
+</html>
