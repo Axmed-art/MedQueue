@@ -307,7 +307,7 @@ class MedQueueHandler(BaseHTTPRequestHandler):
         relative_path = "index.html" if request_path == "/" else unquote(request_path).lstrip("/")
         file_path = (WEB_ROOT / relative_path).resolve()
         if WEB_ROOT.resolve() not in file_path.parents or not file_path.is_file():
-            self.send_error(404, "Файл не найден")
+            self.send_error(404, "File not found")
             return
         content = file_path.read_bytes()
         content_type = mimetypes.guess_type(file_path.name)[0] or "application/octet-stream"
