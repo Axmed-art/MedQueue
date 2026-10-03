@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Панель клиники — MedQueue</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config = { theme: { extend: { colors: { brand: '#2563EB' }, boxShadow: { soft: '0 10px 30px rgba(15, 23, 42, 0.07)' } } } }</script>
+</head>
+<body class="min-h-screen bg-[#f5f5f5] text-slate-900 antialiased">
+  <main class="mx-auto min-h-screen max-w-2xl px-4 pb-10">
+    <header class="flex items-center justify-between pt-6">
+      <div class="flex items-center gap-3">
+        <a href="index.html" class="text-lg text-slate-500" aria-label="На главную">‹</a>
+        <div><p class="text-[11px] font-semibold text-slate-400">SMILE CLINIC</p><h1 class="mt-0.5 text-lg font-bold">Панель клиники</h1></div>
+      </div>
+      <button id="refresh-button" type="button" class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold">Обновить</button>
+    </header>
+
+    <section class="mt-6" aria-labelledby="create-slot-title">
+      <h2 id="create-slot-title" class="text-base font-bold">Добавить свободное время</h2>
+      <form id="slot-form" class="mt-3 grid gap-3 rounded-xl border border-slate-200 bg-white p-4 sm:grid-cols-2">
+        <label class="text-xs font-semibold">Услуга
+          <select id="service" name="service" required class="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-xs font-normal">
+            <option value="Лечение кариеса">Лечение кариеса</option>
+            <option value="Профессиональная чистка">Профессиональная чистка</option>
+            <option value="Острая боль">Острая боль</option>
+          </select>
+        </label>
+        <label class="text-xs font-semibold">Цена, ₸
+          <input id="price" name="price" type="number" min="1" step="500" value="15000" required class="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-xs font-normal">
+        </label>
+        <label class="text-xs font-semibold">Дата
+          <input id="slot-date" name="date" type="date" required class="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-xs font-normal">
+        </label>
+        <label class="text-xs font-semibold">Время
+          <input name="time" type="time" required class="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-xs font-normal">
+        </label>
+        <button type="submit" class="rounded-lg bg-blue-600 px-4 py-3 text-xs font-bold text-white sm:col-span-2">Добавить слот</button>
+        <p id="slot-message" class="hidden text-xs sm:col-span-2" role="status" aria-live="polite"></p>
+      </form>
+    </section>
+
+    <section class="mt-7" aria-labelledby="slots-title">
+      <div class="flex items-end justify-between"><div><p class="text-[11px] font-semibold text-slate-400">РАСПИСАНИЕ</p><h2 id="slots-title" class="mt-1 text-base font-bold">Слоты клиники</h2></div><span id="slot-count" class="text-xs text-slate-400"></span></div>
+      <div id="slots-list" class="mt-3 space-y-2"></div>
+    </section>
+
+    <section class="mt-7" aria-labelledby="appointments-title">
+      <div class="flex items-end justify-between"><div><p class="text-[11px] font-semibold text-slate-400">ПАЦИЕНТЫ</p><h2 id="appointments-title" class="mt-1 text-base font-bold">Записи</h2></div><span id="appointment-count" class="text-xs text-slate-400"></span></div>
+      <div id="appointments-list" class="mt-3 space-y-2"></div>
+    </section>
+    <p id="page-error" class="mt-5 hidden rounded-lg bg-rose-50 p-3 text-xs text-rose-700" role="alert"></p>
+  </main>
+
+  <script>
+    const slotForm = document.getElementById('slot-form');
+    const slotMessage = document.getElementById('slot-message');
+    const slotDate = document.getElementById('slot-date');
+    const serviceSelect = document.getElementById('service');
+    const priceInput = document.getElementById('price');
+    const suggestedPrices = { 'Лечение кариеса': 15000, 'Профессиональная чистка': 12000, 'Острая боль': 8000 };
+    const today = new Date();
+    const localToday = new Date(today.getTime() - today.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+    slotDate.min = localToday;
+    serviceSelect.addEventListener('change', () => { priceInput.value = suggestedPrices[serviceSelect.value] || ''; });
+
+    function formatDate(value) {
+      return new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(value + 'T12:00:00'));
+    }
+
+    async function api(path, options) {
+      const response = await fetch(path, options);
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Не удалось выполнить запрос');
+      return data;
+    }
+
+    function showMessage(element, message, isError) {
+      element.textContent = message;
+      element.className = `text-xs sm:col-span-2 ${isError ? 'text-rose-600' : 'text-emerald-700'}`;
+    }
+
+    function renderSlots(slots) {
+      const list = document.getElementById('slots-list');
+      list.replaceChildren();
+      document.getElementById('slot-count').textContent = `${slots.length} всего`;
+      if (!slots.length) {
+        list.innerHTML = '<p class="rounded-xl border border-slate-200 bg-white p-4 text-xs text-slate-500">Слотов пока нет.</p>';
+        return;
+      }
+      slots.forEach((slot) => {
+        const card = document.createElement('article');
+        card.className = 'flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-3';
+        const details = document.createElement('div');
+        const title = document.createElement('p');
+        title.className = 'text-xs font-bold';
+        title.textContent = `${slot.service} · ${formatDate(slot.date)} в ${slot.time}`;
+        const meta = document.createElement('p');
+        meta.className = 'mt-1 text-[11px] text-slate-500';
+        meta.textContent = `${slot.price.toLocaleString('ru-RU')} ₸ · ${slot.booked ? `Пациент: ${slot.patient_name}` : 'Свободно'}`;
+        details.append(title, meta);
+        card.append(details);
+        if (!slot.booked) {
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.className = 'shrink-0 rounded-lg border border-rose-100 px-3 py-2 text-[11px] font-semibold text-rose-600';
+          button.textContent = 'Удалить';
+          button.addEventListener('click', async () => {
+            try {
+              await api(`/api/slots/${slot.id}`, { method: 'DELETE' });
+              await loadDashboard();
+            } catch (error) { showPageError(error.message); }
+          });
+          card.append(button);
+        } else {
+          const badge = document.createElement('span');
+          badge.className = 'shrink-0 rounded-lg bg-blue-50 px-2 py-1 text-[10px] font-semibold text-blue-700';
+          badge.textContent = 'Занято';
+          card.append(badge);
+        }
+        list.append(card);
+      });
+    }
+
+    function renderAppointments(appointments) {
+      const list = document.getElementById('appointments-list');
+      list.replaceChildren();
+      document.getElementById('appointment-count').textContent = `${appointments.length} всего`;
+      if (!appointments.length) {
+        list.innerHTML = '<p class="rounded-xl border border-slate-200 bg-white p-4 text-xs text-slate-500">Записей пока нет.</p>';
+        return;
+      }
+      appointments.forEach((appointment) => {
+        const card = document.createElement('article');
+        card.className = 'rounded-xl border border-slate-200 bg-white p-4';
+        const name = document.createElement('p');
+        name.className = 'text-sm font-bold';
+        name.textContent = appointment.patient_name;
+        const phone = document.createElement('p');
+        phone.className = 'mt-1 text-xs text-slate-500';
+        phone.textContent = appointment.phone;
+        const detail = document.createElement('p');
+        detail.className = 'mt-3 border-t border-slate-100 pt-3 text-xs font-semibold';
+        detail.textContent = `${appointment.slot.service} · ${formatDate(appointment.slot.date)} в ${appointment.slot.time}`;
+        const price = document.createElement('p');
+        price.className = 'mt-1 text-[11px] text-slate-500';
+        price.textContent = `${appointment.slot.price.toLocaleString('ru-RU')} ₸`;
+        card.append(name, phone, detail, price);
+        list.append(card);
+      });
+    }
+
+    function showPageError(message) {
+      const error = document.getElementById('page-error');
+      error.textContent = message;
+      error.classList.remove('hidden');
+    }
+
+    async function loadDashboard() {
+      document.getElementById('page-error').classList.add('hidden');
+      try {
+        const [slots, appointments] = await Promise.all([
+          api('/api/slots?all=1'),
+          api('/api/appointments'),
+        ]);
+        const bookingBySlot = new Map(appointments.map((appointment) => [appointment.slot.id, appointment]));
+        renderSlots(slots.map((slot) => ({ ...slot, patient_name: bookingBySlot.get(slot.id)?.patient_name })));
+        renderAppointments(appointments);
+      } catch (error) {
+        showPageError(`${error.message}. Проверьте, что сервер запущен.`);
+      }
+    }
+
+    slotForm.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const formData = new FormData(slotForm);
+      try {
+        await api('/api/slots', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            service: formData.get('service'),
+            date: formData.get('date'),
+            time: formData.get('time'),
+            price: Number(formData.get('price')),
+          }),
+        });
+        showMessage(slotMessage, 'Свободное время добавлено.', false);
+        slotForm.reset();
+        document.getElementById('price').value = '15000';
+        await loadDashboard();
+      } catch (error) {
+        showMessage(slotMessage, error.message, true);
+      }
+    });
+
+    document.getElementById('refresh-button').addEventListener('click', loadDashboard);
+    loadDashboard();
+  </script>
+</body>
+</html>
