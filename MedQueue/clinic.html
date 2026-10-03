@@ -12,6 +12,7 @@
     <header class="flex items-center gap-3 pt-6">
       <a href="index.html" class="text-lg text-slate-500" aria-label="Назад">‹</a>
       <div><p class="text-[11px] font-semibold text-slate-400">РЕЗУЛЬТАТЫ</p><h1 class="mt-0.5 text-base font-bold">Smile Clinic</h1></div>
+      <a href="admin.html" class="ml-auto rounded-lg border border-slate-200 bg-white px-3 py-2 text-[11px] font-semibold text-slate-600">Для клиники</a>
     </header>
 
     <section class="mt-5 overflow-hidden rounded-xl border border-slate-200 bg-white">
@@ -25,15 +26,86 @@
     </section>
 
     <section class="mt-6" aria-labelledby="slots-title">
-      <div class="flex items-center justify-between"><h2 id="slots-title" class="text-base font-bold">Свободное время</h2><span class="text-[11px] font-semibold text-blue-600">Сегодня</span></div>
-      <div class="mt-3 grid grid-cols-3 gap-2">
-        <label class="cursor-pointer"><input type="radio" name="appointment-time" value="18:00" class="peer sr-only" checked><span class="block rounded-lg border border-slate-200 bg-white py-2.5 text-center text-xs font-semibold text-slate-700 transition peer-checked:border-blue-600 peer-checked:bg-blue-600 peer-checked:text-white">18:00</span></label>
-        <label class="cursor-pointer"><input type="radio" name="appointment-time" value="19:15" class="peer sr-only"><span class="block rounded-lg border border-slate-200 bg-white py-2.5 text-center text-xs font-semibold text-slate-700 transition peer-checked:border-blue-600 peer-checked:bg-blue-600 peer-checked:text-white">19:15</span></label>
-        <label class="cursor-pointer"><input type="radio" name="appointment-time" value="20:00" class="peer sr-only"><span class="block rounded-lg border border-slate-200 bg-white py-2.5 text-center text-xs font-semibold text-slate-700 transition peer-checked:border-blue-600 peer-checked:bg-blue-600 peer-checked:text-white">20:00</span></label>
-      </div>
+      <div class="flex items-center justify-between"><h2 id="slots-title" class="text-base font-bold">Свободное время</h2><label class="text-[11px] font-semibold text-blue-600">Услуга
+        <select id="service-filter" class="ml-1 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-[11px] text-slate-700"><option value="">Все услуги</option></select>
+      </label></div>
+      <div id="slot-list" class="mt-3 grid grid-cols-2 gap-2"></div>
+      <p id="slot-status" class="mt-3 text-xs text-slate-500" role="status" aria-live="polite"></p>
     </section>
 
-    <div class="mt-6 rounded-xl border border-slate-200 bg-white p-3"><div class="flex items-center justify-between"><div><p class="text-[11px] text-slate-400">Выбрано время</p><p class="mt-1 text-sm font-bold">Сегодня, 18:00</p></div><a href="booking.html" class="rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white">Записаться · 15 000 ₸</a></div></div>
+    <div class="mt-6 rounded-xl border border-slate-200 bg-white p-3"><div class="flex items-center justify-between gap-3"><div class="min-w-0"><p class="text-[11px] text-slate-400">Выбрано время</p><p id="selected-slot" class="mt-1 text-sm font-bold">Выберите свободный слот</p><p id="selected-price" class="mt-1 text-xs text-slate-500"></p></div><a id="booking-link" href="booking.html" aria-disabled="true" class="pointer-events-none rounded-lg bg-slate-300 px-3 py-2 text-center text-xs font-bold text-white">Записаться</a></div></div>
   </main>
+  <script>
+    const slotList = document.getElementById('slot-list');
+    const serviceFilter = document.getElementById('service-filter');
+    const slotStatus = document.getElementById('slot-status');
+    const bookingLink = document.getElementById('booking-link');
+    let availableSlots = [];
+    let selectedSlotId = null;
+
+    function formatDate(value) {
+      return new Intl.DateTimeFormat('ru-RU', { weekday: 'short', day: 'numeric', month: 'short' }).format(new Date(value + 'T12:00:00'));
+    }
+
+    function updateSelection() {
+      const slot = availableSlots.find((item) => item.id === selectedSlotId);
+      document.getElementById('selected-slot').textContent = slot ? `${formatDate(slot.date)}, ${slot.time}` : 'Выберите свободный слот';
+      document.getElementById('selected-price').textContent = slot ? `${slot.service} · ${slot.price.toLocaleString('ru-RU')} ₸` : '';
+      bookingLink.href = slot ? `booking.html?slot_id=${encodeURIComponent(slot.id)}` : 'booking.html';
+      bookingLink.setAttribute('aria-disabled', slot ? 'false' : 'true');
+      bookingLink.classList.toggle('pointer-events-none', !slot);
+      bookingLink.classList.toggle('bg-slate-300', !slot);
+      bookingLink.classList.toggle('bg-blue-600', Boolean(slot));
+    }
+
+    function renderSlots() {
+      const filtered = availableSlots.filter((slot) => !serviceFilter.value || slot.service === serviceFilter.value);
+      slotList.replaceChildren();
+      if (!filtered.length) {
+        slotStatus.textContent = availableSlots.length ? 'Для этой услуги пока нет свободного времени.' : 'Свободных слотов пока нет. Попробуйте позже.';
+        selectedSlotId = null;
+        updateSelection();
+        return;
+      }
+      slotStatus.textContent = '';
+      if (!filtered.some((slot) => slot.id === selectedSlotId)) selectedSlotId = null;
+      filtered.forEach((slot) => {
+        const label = document.createElement('label');
+        label.className = 'cursor-pointer';
+        const radio = document.createElement('input');
+        radio.type = 'radio';
+        radio.name = 'appointment-slot';
+        radio.value = String(slot.id);
+        radio.className = 'peer sr-only';
+        radio.checked = slot.id === selectedSlotId;
+        const content = document.createElement('span');
+        content.className = 'block rounded-lg border border-slate-200 bg-white px-2 py-2.5 text-center text-xs font-semibold text-slate-700 transition peer-checked:border-blue-600 peer-checked:bg-blue-600 peer-checked:text-white';
+        content.textContent = `${formatDate(slot.date)} · ${slot.time}`;
+        radio.addEventListener('change', () => { selectedSlotId = slot.id; updateSelection(); });
+        label.append(radio, content);
+        slotList.append(label);
+      });
+      updateSelection();
+    }
+
+    async function loadSlots() {
+      try {
+        const response = await fetch('/api/slots');
+        const slots = await response.json();
+        if (!response.ok) throw new Error(slots.error || 'Не удалось загрузить расписание');
+        availableSlots = slots;
+        const services = [...new Set(slots.map((slot) => slot.service))];
+        serviceFilter.replaceChildren(new Option('Все услуги', ''));
+        services.forEach((service) => serviceFilter.add(new Option(service, service)));
+        renderSlots();
+      } catch (error) {
+        slotStatus.textContent = `${error.message}. Проверьте, что сервер запущен.`;
+      }
+    }
+
+    serviceFilter.addEventListener('change', renderSlots);
+    bookingLink.addEventListener('click', (event) => { if (!selectedSlotId) event.preventDefault(); });
+    loadSlots();
+  </script>
 </body>
 </html>
