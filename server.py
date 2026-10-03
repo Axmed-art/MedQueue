@@ -14,6 +14,7 @@ from typing import Iterator
 from urllib.parse import parse_qs, unquote, urlsplit
 
 
+# Пути заданы относительно этого файла, поэтому сервер можно запускать из любой папки.
 ROOT = Path(__file__).resolve().parent
 WEB_ROOT = ROOT / "MedQueue"
 DATABASE = ROOT / "medqueue.db"
@@ -21,10 +22,13 @@ HOST = "127.0.0.1"
 PORT = 8000
 
 
+# Открываем отдельное соединение для каждого запроса и всегда закрываем его после ответа.
 @contextmanager
 def connect_db() -> Iterator[sqlite3.Connection]:
     connection = sqlite3.connect(DATABASE, timeout=10)
+    # Именованные поля удобнее использовать при подготовке JSON-ответов.
     connection.row_factory = sqlite3.Row
+    # Включаем проверку внешнего ключа appointments.slot_id -> slots.id.
     connection.execute("PRAGMA foreign_keys = ON")
     try:
         yield connection
@@ -36,11 +40,13 @@ def connect_db() -> Iterator[sqlite3.Connection]:
         connection.close()
 
 
+# Создаём таблицы при запуске; демо-слоты добавляются только в новую базу.
 def initialize_database() -> None:
     is_new_database = not DATABASE.exists()
     with connect_db() as connection:
         connection.executescript(
             """
+            -- Свободные даты, услуги и цены, которые администратор публикует для записи.
             CREATE TABLE IF NOT EXISTS slots (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 clinic_name TEXT NOT NULL,
@@ -52,6 +58,7 @@ def initialize_database() -> None:
                 UNIQUE (clinic_name, appointment_date, appointment_time)
             );
 
+            -- Одна запись занимает один слот; UNIQUE не допускает повторное бронирование.
             CREATE TABLE IF NOT EXISTS appointments (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 slot_id INTEGER NOT NULL UNIQUE REFERENCES slots(id) ON DELETE RESTRICT,
@@ -62,6 +69,7 @@ def initialize_database() -> None:
             """
         )
 
+        # Тестовое расписание нужно для первого показа; существующую базу не перезаписываем.
         if is_new_database:
             tomorrow = date.today() + timedelta(days=1)
             day_after = date.today() + timedelta(days=2)
@@ -81,6 +89,7 @@ def initialize_database() -> None:
             )
 
 
+# Преобразуем строку SQLite в JSON-объект для страниц сайта.
 def slot_record(row: sqlite3.Row, booked: bool = False) -> dict:
     return {
         "id": row["id"],
@@ -96,18 +105,22 @@ def slot_record(row: sqlite3.Row, booked: bool = False) -> dict:
 class MedQueueHandler(BaseHTTPRequestHandler):
     server_version = "MedQueue/1.0"
 
+    # Короткий журнал помогает видеть запросы сайта к серверу в окне запуска.
     def log_message(self, format: str, *args) -> None:
         print(f"[{self.log_date_time_string()}] {format % args}")
 
+    # Отправляем единый JSON-ответ, который читают JavaScript-страницы.
     def send_json(self, status: int, payload: dict | list) -> None:
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
+        # API-ответы не кэшируются: состояние слота меняется после каждой записи.
         self.send_header("Cache-Control", "no-store")
         self.end_headers()
         self.wfile.write(body)
 
+    # Читаем JSON из POST-запроса и ограничиваем его размер.
     def read_json(self) -> dict:
         try:
             length = int(self.headers.get("Content-Length", "0"))
@@ -120,9 +133,11 @@ class MedQueueHandler(BaseHTTPRequestHandler):
         except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as error:
             raise ValueError("Некорректные данные запроса") from error
 
+    # Направляем GET-запросы к API или отдаём HTML-файлы сайта.
     def do_GET(self) -> None:
         parsed = urlsplit(self.path)
         path = parsed.path.rstrip("/") or "/"
+        # Отдельный маршрут отдаёт слоты, выбранный слот или список записей.
         if path == "/api/slots":
             self.get_slots(parse_qs(parsed.query))
         elif re.fullmatch(r"/api/slots/\d+", path):
@@ -132,6 +147,7 @@ class MedQueueHandler(BaseHTTPRequestHandler):
         else:
             self.serve_static(path)
 
+    # POST используется для добавления слотов и создания записи пациента.
     def do_POST(self) -> None:
         path = urlsplit(self.path).path.rstrip("/")
         if path == "/api/slots":
@@ -141,6 +157,7 @@ class MedQueueHandler(BaseHTTPRequestHandler):
         else:
             self.send_json(404, {"error": "Маршрут не найден"})
 
+    # DELETE разрешён только для свободных временных слотов.
     def do_DELETE(self) -> None:
         path = urlsplit(self.path).path.rstrip("/")
         match = re.fullmatch(r"/api/slots/(\d+)", path)
@@ -149,8 +166,10 @@ class MedQueueHandler(BaseHTTPRequestHandler):
         else:
             self.send_json(404, {"error": "Маршрут не найден"})
 
+    # Отдаём расписание; параметр all=1 нужен админке, чтобы видеть занятые слоты.
     def get_slots(self, query: dict[str, list[str]]) -> None:
         include_booked = query.get("all", ["0"])[0] == "1"
+        # По умолчанию скрываем занятые слоты; админка передаёт all=1.
         sql = """
             SELECT s.*, EXISTS(
                 SELECT 1 FROM appointments a WHERE a.slot_id = s.id
@@ -165,6 +184,7 @@ class MedQueueHandler(BaseHTTPRequestHandler):
             rows = connection.execute(sql, params).fetchall()
         self.send_json(200, [slot_record(row, bool(row["booked"])) for row in rows])
 
+    # По ID загружаем детали слота перед показом формы подтверждения.
     def get_slot(self, slot_id: int) -> None:
         with connect_db() as connection:
             row = connection.execute(
@@ -179,6 +199,7 @@ class MedQueueHandler(BaseHTTPRequestHandler):
             return
         self.send_json(200, slot_record(row, bool(row["booked"])))
 
+    # Админка получает список пациентов вместе с выбранной услугой и временем.
     def get_appointments(self) -> None:
         with connect_db() as connection:
             rows = connection.execute(
@@ -209,9 +230,11 @@ class MedQueueHandler(BaseHTTPRequestHandler):
             ],
         )
 
+    # Проверяем дату, время и цену, затем добавляем новый слот в SQLite.
     def create_slot(self) -> None:
         try:
             data = self.read_json()
+            # Сначала проверяем обязательные поля и не принимаем время в прошлом.
             clinic_name = str(data.get("clinic_name", "Smile Clinic")).strip()
             service = str(data.get("service", "")).strip()
             appointment_date = str(data.get("date", "")).strip()
@@ -240,6 +263,7 @@ class MedQueueHandler(BaseHTTPRequestHandler):
             return
         self.send_json(201, slot_record(row))
 
+    # Нельзя удалить слот, на который уже записан пациент.
     def delete_slot(self, slot_id: int) -> None:
         with connect_db() as connection:
             row = connection.execute(
@@ -255,6 +279,7 @@ class MedQueueHandler(BaseHTTPRequestHandler):
             connection.execute("DELETE FROM slots WHERE id = ?", (slot_id,))
         self.send_json(200, {"deleted": True})
 
+    # BEGIN IMMEDIATE и UNIQUE slot_id не дают двум запросам занять один слот.
     def create_appointment(self) -> None:
         try:
             data = self.read_json()
@@ -272,6 +297,7 @@ class MedQueueHandler(BaseHTTPRequestHandler):
 
         try:
             with connect_db() as connection:
+                # Блокируем запись на время транзакции, пока проверяем доступность слота.
                 connection.execute("BEGIN IMMEDIATE")
                 slot = connection.execute(
                     "SELECT * FROM slots WHERE id = ?",
@@ -303,6 +329,7 @@ class MedQueueHandler(BaseHTTPRequestHandler):
             },
         )
 
+    # Отдаём только файлы внутри папки MedQueue, не открывая доступ к остальному проекту.
     def serve_static(self, request_path: str) -> None:
         relative_path = "index.html" if request_path == "/" else unquote(request_path).lstrip("/")
         file_path = (WEB_ROOT / relative_path).resolve()
@@ -322,6 +349,7 @@ class MedQueueHandler(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
+    # При запуске создаём базу и поднимаем локальный HTTP-сервер.
     initialize_database()
     httpd = ThreadingHTTPServer((HOST, PORT), MedQueueHandler)
     print(f"MedQueue запущен: http://{HOST}:{PORT}")
