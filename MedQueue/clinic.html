@@ -6,6 +6,22 @@
   <title>Smile Clinic — MedQueue</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>tailwind.config = { theme: { extend: { colors: { brand: '#2563EB' }, boxShadow: { soft: '0 10px 30px rgba(15, 23, 42, 0.07)' } } } }</script>
+  <style>
+    :root { color-scheme: light; --mq-ink: #173A3F; --mq-green: #176B52; --mq-soft: #EEF7F2; --mq-line: #DCE8E1; }
+    body { background: radial-gradient(circle at 50% 0%, rgba(214,234,212,.55), transparent 38%), #F5F7F2 !important; color: var(--mq-ink) !important; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+    body > main { background: #F5F7F2 !important; color: var(--mq-ink); }
+    [class~="bg-blue-600"], [class~="hover:bg-blue-700"]:hover { background-color: var(--mq-green) !important; }
+    [class~="text-blue-600"], [class~="text-blue-700"], [class~="hover:text-blue-600"]:hover { color: var(--mq-green) !important; }
+    [class~="bg-blue-50"] { background-color: var(--mq-soft) !important; }
+    [class~="border-blue-100"], [class~="border-blue-200"] { border-color: var(--mq-line) !important; }
+    [class~="shadow-blue-200"] { --tw-shadow-color: rgba(23,107,82,.13) !important; }
+    [class~="focus:border-blue-500"]:focus { border-color: var(--mq-green) !important; }
+    [class~="focus:ring-blue-100"]:focus, [class~="focus:ring-blue-200"]:focus { --tw-ring-color: rgba(23,107,82,.13) !important; }
+    body > main > section[class~="bg-white"] { border-color: var(--mq-line); box-shadow: 0 14px 34px rgba(23,58,63,.07); }
+    body > main > header a, body > main nav > div { border-radius: 14px; }
+    input, select, button, a { transition-duration: .2s; }
+    @media (min-width: 448px) { body > main { box-shadow: 0 0 55px rgba(23,58,63,.07); } }
+  </style>
 </head>
 <body class="min-h-screen bg-slate-100 text-slate-900 antialiased">
   <main class="mx-auto min-h-screen max-w-md bg-slate-50 px-4 pb-36">
