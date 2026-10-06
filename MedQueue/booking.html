@@ -6,9 +6,17 @@
   <title>Подтверждение записи — MedQueue</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>tailwind.config = { theme: { extend: { colors: { brand: '#2563EB' }, boxShadow: { soft: '0 10px 30px rgba(15, 23, 42, 0.07)' } } } }</script>
+
+  <style>
+    .bottom-nav { position: fixed; z-index: 20; right: 0; bottom: 0; left: 0; display: grid; grid-template-columns: repeat(4, 1fr); border-top: 1px solid #e5e9ee; background: rgba(255,255,255,.97); padding: 8px 12px max(8px, env(safe-area-inset-bottom)); }
+    .nav-item { display: flex; min-height: 52px; flex-direction: column; align-items: center; justify-content: center; gap: 4px; color: #7b8795; font-size: 10px; font-weight: 550; text-decoration: none; }
+    .nav-item svg { width: 21px; height: 21px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+    .nav-item.is-current { color: #1677d2; }
+    @media (min-width: 640px) { .bottom-nav { right: 50%; bottom: 18px; left: auto; width: min(560px, calc(100vw - 32px)); transform: translateX(50%); border: 1px solid #e5e9ee; border-radius: 12px; box-shadow: 0 8px 28px #17233412; padding: 6px 12px; } }
+  </style>
 </head>
 <body class="min-h-screen bg-slate-100 text-slate-900 antialiased">
-  <main class="mx-auto min-h-screen max-w-md bg-slate-50 px-4 pb-8">
+  <main class="mx-auto min-h-screen max-w-md bg-slate-50 px-4 pb-28">
     <!-- Кнопка назад возвращает к расписанию, чтобы пациент мог изменить время. -->
     <header class="flex items-center gap-3 pt-6">
       <a href="clinic.html" class="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-lg text-slate-500 transition hover:border-blue-300 hover:text-blue-600" aria-label="Назад к выбору времени">‹</a>
@@ -50,6 +58,8 @@
       <a href="index.html" class="mt-5 inline-flex w-full items-center justify-center rounded-xl bg-blue-600 px-4 py-3.5 text-sm font-bold text-white shadow-md shadow-blue-200 transition hover:bg-blue-700">На главную</a>
     </section>
   </main>
+
+  <nav class="bottom-nav" aria-label="Основная навигация"><a href="index.html" class="nav-item" ><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z"></path></svg><span>Главная</span></a><a href="index.html#clinics" class="nav-item"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21V7l9-4 9 4v14M3 11h18M8 11v10m8-10v10M9 7h.01M15 7h.01"></path></svg><span>Клиники</span></a><a href="clinic.html" class="nav-item is-current" aria-current="page"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M16 3v4M8 3v4M3 10h18m-12 5 2 2 4-4"></path></svg><span>Запись</span></a><a href="admin.html" class="nav-item"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"></circle><path d="M4 21v-2a8 8 0 0 1 16 0v2z"></path></svg><span>Кабинет</span></a></nav>
   <script>
     // ID слота передаётся со страницы клиники в параметре ссылки slot_id.
     const slotId = new URLSearchParams(window.location.search).get('slot_id');
