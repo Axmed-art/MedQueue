@@ -9,13 +9,11 @@
 </head>
 <body class="min-h-screen bg-slate-100 text-slate-900 antialiased">
   <main class="mx-auto min-h-screen max-w-3xl bg-slate-50 px-4 pb-12 sm:px-6">
-    <!-- Шапка панели: возврат на сайт и ручное обновление данных с сервера. -->
     <header class="flex items-center justify-between gap-3 pt-6">
       <div class="flex min-w-0 items-center gap-3"><a href="index.html" class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-lg text-slate-500 transition hover:border-blue-300 hover:text-blue-600" aria-label="На главную">‹</a><div class="min-w-0"><p class="text-[10px] font-bold uppercase tracking-[0.14em] text-blue-600">SMILE CLINIC</p><h1 class="mt-0.5 truncate text-lg font-bold">Панель клиники</h1></div></div>
       <button id="refresh-button" type="button" class="shrink-0 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-bold text-slate-600 transition hover:border-blue-300 hover:text-blue-600 focus:outline-none focus:ring-4 focus:ring-blue-100">↻ <span class="hidden sm:inline">Обновить</span></button>
     </header>
 
-    <!-- Счётчики помогают быстро понять, сколько слотов занято и доступно. -->
     <section class="mt-6" aria-label="Сводка клиники">
       <div class="grid grid-cols-3 gap-2 sm:gap-3">
         <article class="rounded-2xl border border-slate-200 bg-white p-3 shadow-soft sm:p-4"><p class="text-[10px] font-semibold text-slate-500 sm:text-xs">Записи</p><p id="stat-appointments" class="mt-2 text-xl font-bold text-slate-900 sm:text-2xl">—</p><p class="mt-1 text-[9px] text-slate-400 sm:text-[10px]">всего пациентов</p></article>
@@ -26,7 +24,6 @@
 
     <div id="page-error" class="mt-4 hidden rounded-xl border border-rose-200 bg-rose-50 p-4 text-xs leading-5 text-rose-700" role="alert"></div>
 
-    <!-- Форма расписания создаёт слот; цена подставляется по выбранной услуге. -->
     <section class="mt-7" aria-labelledby="create-slot-title">
       <div><p class="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400">Расписание</p><h2 id="create-slot-title" class="mt-1 text-base font-bold">Добавить свободное время</h2></div>
       <form id="slot-form" class="mt-3 grid gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-soft sm:grid-cols-2 sm:p-5">
@@ -51,13 +48,11 @@
       </form>
     </section>
 
-    <!-- Список слотов показывает занятость и разрешает удалять только свободное время. -->
     <section class="mt-8" aria-labelledby="slots-title">
       <div class="flex items-end justify-between gap-3"><div><p class="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400">Слоты</p><h2 id="slots-title" class="mt-1 text-base font-bold">Расписание клиники</h2></div><span id="slot-count" class="rounded-full bg-slate-200 px-2.5 py-1 text-[10px] font-bold text-slate-600"></span></div>
       <div id="slots-list" class="mt-3 space-y-2"></div>
     </section>
 
-    <!-- Поиск и фильтр работают по загруженным записям, не отправляя новый запрос при каждом вводе. -->
     <section class="mt-8" aria-labelledby="appointments-title">
       <div class="flex items-end justify-between gap-3"><div><p class="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400">Клиенты</p><h2 id="appointments-title" class="mt-1 text-base font-bold">Записи пациентов</h2></div><span id="appointment-count" class="rounded-full bg-blue-50 px-2.5 py-1 text-[10px] font-bold text-blue-700"></span></div>
       <div class="mt-3 rounded-2xl border border-slate-200 bg-white p-3 shadow-soft sm:p-4">
@@ -72,7 +67,6 @@
   </main>
 
   <script>
-    // Основные элементы формы расписания и фильтра записей.
     const slotForm = document.getElementById('slot-form');
     const slotMessage = document.getElementById('slot-message');
     const slotDate = document.getElementById('slot-date');
@@ -84,18 +78,14 @@
     const now = new Date();
     const localToday = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
     slotDate.min = localToday;
-    // Подставляем типовую цену, но администратор может изменить её вручную.
     serviceSelect.addEventListener('change', () => { priceInput.value = suggestedPrices[serviceSelect.value] || ''; });
 
-    // Кэш записей нужен, чтобы мгновенно применять поиск и фильтр услуги.
     let allAppointments = [];
 
-    // Единое отображение дат в расписании и списке пациентов.
     function formatDate(value) {
       return new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(value + 'T12:00:00'));
     }
 
-    // Общая обёртка над fetch обрабатывает JSON и сообщения об ошибках API.
     async function api(path, options) {
       const response = await fetch(path, options);
       const data = await response.json();
@@ -103,13 +93,11 @@
       return data;
     }
 
-    // Сообщение под формой подтверждает успешное действие или объясняет ошибку.
     function showMessage(element, message, isError = false) {
       element.textContent = message;
       element.className = `text-xs sm:col-span-2 ${isError ? 'text-rose-600' : 'text-emerald-700'}`;
     }
 
-    // Строим список слотов и связываем занятый слот с данными пациента.
     function renderSlots(slots, appointments) {
       const list = document.getElementById('slots-list');
       list.replaceChildren();
@@ -162,7 +150,6 @@
       });
     }
 
-    // Фильтруем записи по имени, телефону, услуге и дате, затем рисуем карточки.
     function renderAppointments() {
       const list = document.getElementById('appointments-list');
       const query = appointmentSearch.value.trim().toLocaleLowerCase('ru');
@@ -210,7 +197,6 @@
       });
     }
 
-    // Если сервер недоступен, показываем ошибку и кнопку повторной загрузки.
     function showPageError(message) {
       const error = document.getElementById('page-error');
       error.replaceChildren();
@@ -225,7 +211,6 @@
       error.classList.remove('hidden');
     }
 
-    // Загружаем расписание и записи параллельно, затем обновляем счётчики и списки.
     async function loadDashboard() {
       document.getElementById('page-error').classList.add('hidden');
       document.getElementById('refresh-button').disabled = true;
@@ -248,7 +233,6 @@
       }
     }
 
-    // Отправляем новый слот API; после ответа очищаем форму и перечитываем панель.
     slotForm.addEventListener('submit', async (event) => {
       event.preventDefault();
       const addButton = document.getElementById('add-slot-button');
@@ -273,7 +257,6 @@
       }
     });
 
-    // Подключаем обновление, живой поиск, фильтр услуги и сброс фильтров.
     document.getElementById('refresh-button').addEventListener('click', loadDashboard);
     appointmentSearch.addEventListener('input', renderAppointments);
     appointmentService.addEventListener('change', renderAppointments);

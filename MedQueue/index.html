@@ -36,7 +36,6 @@
 </head>
 <body class="min-h-screen bg-slate-100 text-slate-900 antialiased">
   <main class="mx-auto min-h-screen max-w-md bg-slate-50 px-4 pb-10">
-    <!-- Шапка показывает бренд и поиск по названию или адресу клиники. -->
     <header class="pt-6">
       <div class="flex items-center justify-between">
         <a href="index.html" class="flex items-center gap-2" aria-label="MedQueue, на главную">
@@ -45,7 +44,6 @@
         </a>
         <span class="rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600">Алматы</span>
       </div>
-      <!-- Короткое описание продукта и поле поиска для фильтрации каталога. -->
       <section class="mt-5 rounded-2xl bg-gradient-to-br from-blue-700 to-blue-500 p-5 text-white shadow-lg shadow-blue-200">
         <p class="text-[11px] font-bold uppercase tracking-[0.16em] text-blue-100">Запись к стоматологу</p>
         <h1 class="mt-2 text-2xl font-bold leading-tight">Найдите время<br>для своей улыбки</h1>
@@ -57,7 +55,6 @@
       </section>
     </header>
 
-    <!-- Быстрые кнопки выбирают услугу и оставляют клиники с подходящими слотами. -->
     <section class="mt-7" aria-labelledby="services-title">
       <div class="flex items-end justify-between">
         <div><p class="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400">Шаг 1</p><h2 id="services-title" class="mt-1 text-base font-bold">Какая услуга нужна?</h2></div>
@@ -71,7 +68,6 @@
       </div>
     </section>
 
-    <!-- Каталог: у Smile Clinic данные расписания настоящие, остальные клиники пока без онлайн-записи. -->
     <section class="mt-7" aria-labelledby="clinics-title">
       <div class="flex items-end justify-between">
         <div><p class="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400">Алматы · сегодня и ближайшие дни</p><h2 id="clinics-title" class="mt-1 text-base font-bold">Клиники рядом</h2></div>
@@ -112,7 +108,6 @@
     </section>
   </main>
   <script>
-    // Состояние фильтров и данные о свободном расписании клиники.
     const searchInput = document.getElementById('clinic-search');
     const clinicCards = [...document.querySelectorAll('[data-clinic]')];
     const serviceButtons = [...document.querySelectorAll('[data-service-filter]')];
@@ -122,7 +117,6 @@
     let activeService = '';
     let availableSlots = [];
 
-    // Одновременно применяем поиск и выбранную услугу, затем обновляем счётчик.
     function applyFilters() {
       const query = searchInput.value.trim().toLocaleLowerCase('ru');
       const visibleCards = [];
@@ -140,7 +134,6 @@
       clinicLink.href = activeService ? `clinic.html?service=${encodeURIComponent(activeService)}` : 'clinic.html';
     }
 
-    // Каждая кнопка услуги включает свой фильтр; повторно сбросить можно кнопкой «Все услуги».
     serviceButtons.forEach((button) => {
       button.addEventListener('click', () => {
         activeService = button.dataset.serviceFilter;
@@ -157,7 +150,6 @@
         applyFilters();
       });
     });
-    // Сброс очищает поиск, возвращает все карточки и переносит курсор в поиск.
     document.getElementById('clear-service').addEventListener('click', () => {
       searchInput.value = '';
       serviceButtons.find((button) => button.dataset.serviceFilter === '')?.click();
@@ -165,7 +157,6 @@
     });
     searchInput.addEventListener('input', applyFilters);
 
-    // Загружаем реальные слоты, чтобы показать актуальную цену и число свободных окон.
     fetch('/api/slots')
       .then((response) => response.json().then((data) => {
         if (!response.ok) throw new Error(data.error || 'Не удалось загрузить расписание');

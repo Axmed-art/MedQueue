@@ -25,20 +25,17 @@
 </head>
 <body class="min-h-screen bg-slate-100 text-slate-900 antialiased">
   <main class="mx-auto min-h-screen max-w-md bg-slate-50 px-4 pb-8">
-    <!-- Кнопка назад возвращает к расписанию, чтобы пациент мог изменить время. -->
     <header class="flex items-center gap-3 pt-6">
       <a href="clinic.html" class="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-lg text-slate-500 transition hover:border-blue-300 hover:text-blue-600" aria-label="Назад к выбору времени">‹</a>
       <div><p class="text-[10px] font-bold uppercase tracking-[0.14em] text-blue-600">Последний шаг</p><h1 class="mt-0.5 text-base font-bold">Ваши данные</h1></div>
     </header>
 
-    <!-- На последнем шаге ещё раз показываем этапы, услугу, время и цену. -->
     <nav class="mt-5 grid grid-cols-3 gap-2" aria-label="Этапы записи">
       <div class="rounded-xl bg-blue-600 px-2 py-2.5 text-center text-[10px] font-bold text-white"><span class="block text-sm">✓</span>Клиника</div>
       <div class="rounded-xl bg-blue-600 px-2 py-2.5 text-center text-[10px] font-bold text-white"><span class="block text-sm">✓</span>Время</div>
       <div aria-current="step" class="rounded-xl bg-blue-600 px-2 py-2.5 text-center text-[10px] font-bold text-white"><span class="block text-sm">3</span>Ваши данные</div>
     </nav>
 
-    <!-- Сводка слота и форма пациента; поля разблокируются после проверки слота на сервере. -->
     <section id="booking-content" class="mt-6">
       <div class="flex items-end justify-between"><div><p class="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400">Проверьте детали</p><h2 class="mt-1 text-lg font-bold">Почти готово</h2></div><span class="rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-bold text-emerald-700">Стоимость указана заранее</span></div>
       <article class="mt-4 rounded-2xl border border-blue-100 bg-white p-4 shadow-soft">
@@ -56,7 +53,6 @@
       </form>
     </section>
 
-    <!-- Этот экран показывается только после успешного ответа API и сохранения в базе. -->
     <section id="success-state" class="hidden pt-14 text-center" aria-live="polite">
       <div class="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-emerald-100 text-4xl text-emerald-600">✓</div>
       <p class="mt-6 text-[10px] font-bold uppercase tracking-[0.16em] text-emerald-700">Запись сохранена в системе</p>
@@ -67,7 +63,6 @@
     </section>
   </main>
   <script>
-    // ID слота передаётся со страницы клиники в параметре ссылки slot_id.
     const slotId = new URLSearchParams(window.location.search).get('slot_id');
     const form = document.getElementById('appointment-form');
     const submitButton = document.getElementById('submit-button');
@@ -76,19 +71,16 @@
     const nameInput = document.getElementById('name');
     let selectedSlot = null;
 
-    // Форматируем дату для человека, а не показываем технический YYYY-MM-DD.
     function formatDate(value) {
       return new Intl.DateTimeFormat('ru-RU', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(value + 'T12:00:00'));
     }
 
-    // Собираем локальную дату из частей, чтобы не смещать время из-за часового пояса.
     function localDateTime(value) {
       const [year, month, day] = value.date.split('-').map(Number);
       const [hours, minutes] = value.time.split(':').map(Number);
       return new Date(year, month - 1, day, hours, minutes);
     }
 
-    // Общая функция fetch: читает JSON и превращает ответы 4xx/5xx в понятные ошибки.
     async function api(path, options) {
       const response = await fetch(path, options);
       const data = await response.json();
@@ -96,7 +88,6 @@
       return data;
     }
 
-    // При ошибке объясняем причину и даём вернуться к выбору другого слота.
     function showError(message, allowRetrySelection = true) {
       loadError.replaceChildren();
       const text = document.createElement('p');
@@ -112,7 +103,6 @@
       loadError.classList.remove('hidden');
     }
 
-    // Перед показом формы проверяем, что выбранный слот существует и ещё свободен.
     async function loadSlot() {
       if (!slotId || !/^\d+$/.test(slotId)) {
         showError('Сначала выберите свободное время на странице клиники.');
@@ -138,12 +128,10 @@
       }
     }
 
-    // trim не позволяет отправить имя, состоящее только из пробелов.
     nameInput.addEventListener('input', () => {
       nameInput.setCustomValidity(nameInput.value.trim().length < 2 ? 'Введите имя длиной не менее двух символов.' : '');
     });
 
-    // Проверяем форму, отправляем данные пациента API и показываем номер записи.
     form.addEventListener('submit', async (event) => {
       event.preventDefault();
       nameInput.setCustomValidity(nameInput.value.trim().length < 2 ? 'Введите имя длиной не менее двух символов.' : '');
