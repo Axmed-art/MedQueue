@@ -1,0 +1,69 @@
+/* Общие стили нижней навигации и простых страниц-заглушек. */
+.bottom-nav {
+  position: fixed;
+  z-index: 20;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  border-top: 1px solid #e5e9ee;
+  background: rgba(255, 255, 255, .98);
+  padding: 8px 12px max(8px, env(safe-area-inset-bottom));
+}
+.nav-item {
+  display: flex;
+  min-height: 52px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  color: #7b8795;
+  font-size: 10px;
+  font-weight: 550;
+  text-decoration: none;
+}
+.nav-item svg {
+  width: 21px;
+  height: 21px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.nav-item.is-current { color: #1677d2; }
+.account-options { display: grid; gap: 12px; }
+.account-option {
+  display: block;
+  padding: 18px;
+  border: 1px solid #e5e9ee;
+  border-radius: 10px;
+  background: #fff;
+  color: #172334;
+  text-decoration: none;
+}
+.account-option:hover { border-color: #a9cbe9; }
+.account-option span { display: block; margin-top: 5px; color: #687586; font-size: 13px; }
+.empty-state {
+  margin-top: 24px;
+  padding: 26px 18px;
+  border: 1px solid #e5e9ee;
+  border-radius: 10px;
+  background: #fff;
+  color: #687586;
+  text-align: center;
+}
+@media (min-width: 640px) {
+  .bottom-nav {
+    right: 50%;
+    bottom: 18px;
+    left: auto;
+    width: min(560px, calc(100vw - 32px));
+    transform: translateX(50%);
+    border: 1px solid #e5e9ee;
+    border-radius: 12px;
+    box-shadow: 0 8px 28px #17233412;
+    padding: 6px 12px;
+  }
+}
