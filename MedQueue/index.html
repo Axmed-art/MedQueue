@@ -20,10 +20,18 @@
     :root { color-scheme: light; --ink: #172334; --muted: #687586; --line: #e5e9ee; --blue: #1677d2; }
     body { background: #f7f8fa !important; color: var(--ink) !important; font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
     .site-shell { background: #fff !important; padding-bottom: 112px; }
-    .site-shell > header { padding-top: 18px; }
-    /* Логотип оставляем крупным, чтобы знак и подпись читались вместе. */
-    .brand-link { display: inline-flex; align-items: center; }
-    .brand-logo { width: 124px; height: 100px; object-fit: contain; object-position: center; }
+    .site-shell > header { padding-top: 16px; }
+    /* Знак обрезан из исходного логотипа и стоит рядом с текстовым названием. */
+    .brand-row { display: flex; min-height: 56px; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--line); padding-bottom: 10px; }
+    .brand-link { display: inline-flex; align-items: center; gap: 9px; color: inherit; text-decoration: none; }
+    .brand-symbol { position: relative; display: block; width: 58px; height: 42px; overflow: hidden; }
+    .brand-symbol img { position: absolute; top: -1px; left: -5px; width: 72px; max-width: none; height: auto; }
+    .brand-wordmark { display: flex; flex-direction: column; gap: 1px; }
+    .brand-name { color: #172334; font-size: 23px; font-weight: 750; letter-spacing: -.055em; line-height: 1; }
+    .brand-name span { color: #1677d2; }
+    .brand-tagline { color: #687586; font-size: 10px; line-height: 1.3; }
+    .city-label { display: inline-flex; align-items: center; gap: 5px; color: #586678; font-size: 12px; font-weight: 550; }
+    .city-label svg { width: 15px; height: 15px; fill: none; stroke: #1677d2; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
     .intro { display: grid; gap: 24px; padding: 30px 0 24px; border-bottom: 1px solid var(--line); }
     .eyebrow { margin: 0; color: var(--blue); font-size: 12px; font-weight: 650; letter-spacing: .04em; }
     .intro h1 { margin: 8px 0 0; color: var(--ink); font-size: clamp(28px, 5vw, 42px); font-weight: 650; letter-spacing: -.035em; line-height: 1.12; }
@@ -46,6 +54,10 @@
     [data-clinic] a#clinic-link { border-radius: 7px !important; background: var(--blue) !important; box-shadow: none !important; }
     @media (min-width: 640px) {
       .site-shell > header { padding-top: 22px; }
+      .brand-symbol { width: 62px; height: 44px; }
+      .brand-symbol img { width: 76px; }
+      .brand-name { font-size: 25px; }
+      .brand-tagline { font-size: 11px; }
       .intro { grid-template-columns: 1fr minmax(280px, 390px); align-items: end; padding: 48px 0 32px; }
       .site-shell section[aria-labelledby="services-title"], .site-shell section[aria-labelledby="clinics-title"] { margin-top: 34px; }
     }
@@ -53,11 +65,14 @@
 </head>
 <body class="min-h-screen bg-slate-50 text-slate-900 antialiased">
   <main id="home" class="site-shell mx-auto min-h-screen max-w-5xl bg-slate-50 px-4 pb-28 sm:px-6">
-    <!-- Шапка показывает бренд и поиск по названию или адресу клиники. -->
-    <header class="pt-6">
-      <div class="flex items-center justify-between">
-        <a href="index.html" class="brand-link" aria-label="MedQueue, на главную"><img src="assets/medqueue-logo.jpg" alt="MedQueue — умная запись к стоматологу" class="brand-logo" width="132" height="108"></a>
-        <span class="rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600">Алматы</span>
+    <!-- Шапка ставит знак и название рядом, а город оставляет отдельной подсказкой. -->
+    <header class="site-header">
+      <div class="brand-row">
+        <a href="index.html" class="brand-link" aria-label="MedQueue, на главную">
+          <span class="brand-symbol"><img src="assets/medqueue-logo.jpg" alt=""></span>
+          <span class="brand-wordmark"><span class="brand-name">Med<span>Queue</span></span><span class="brand-tagline">Запись к стоматологу</span></span>
+        </a>
+        <span class="city-label"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 10c0 5-7 11-7 11S5 15 5 10a7 7 0 1 1 14 0Z"></path><circle cx="12" cy="10" r="2"></circle></svg>Алматы</span>
       </div>
       <!-- Короткое описание продукта и поле поиска для фильтрации каталога. -->
       <section class="intro mt-5"><div class="intro-copy"><p class="eyebrow">Стоматологии Алматы</p><h1>Забота о зубах<br>начинается с выбора</h1><p class="intro-note">Найдите клинику и удобное время для приёма рядом с вами.</p></div><label class="search-field"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"></circle><path d="m16 16 4 4"></path></svg><input id="clinic-search" type="search" placeholder="Клиника или адрес" aria-label="Поиск по клиникам"></label></section>
