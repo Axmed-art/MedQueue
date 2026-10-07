@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import mimetypes
+import os
 import re
 import sqlite3
 from contextlib import contextmanager
@@ -18,8 +19,8 @@ from urllib.parse import parse_qs, unquote, urlsplit
 ROOT = Path(__file__).resolve().parent
 WEB_ROOT = ROOT / "MedQueue"
 DATABASE = ROOT / "medqueue.db"
-HOST = "127.0.0.1"
-PORT = 8000
+HOST = "0.0.0.0"
+PORT = int(os.environ.get("PORT", "8000"))
 
 
 # Открываем отдельное соединение для каждого запроса и всегда закрываем его после ответа.
@@ -352,7 +353,7 @@ if __name__ == "__main__":
     # При запуске создаём базу и поднимаем локальный HTTP-сервер.
     initialize_database()
     httpd = ThreadingHTTPServer((HOST, PORT), MedQueueHandler)
-    print(f"MedQueue запущен: http://{HOST}:{PORT}")
+    print(f"MedQueue запущен на порту {PORT}")
     print(f"SQLite база: {DATABASE}")
     try:
         httpd.serve_forever()
