@@ -12,8 +12,8 @@
   <main class="mx-auto min-h-screen max-w-3xl bg-slate-50 px-4 pb-28 sm:px-6">
     <!-- Шапка панели: возврат на сайт и ручное обновление данных с сервера. -->
     <header class="flex items-center justify-between gap-3 pt-6">
-      <div class="flex min-w-0 items-center gap-3"><a href="index.html" class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-lg text-slate-500 transition hover:border-blue-300 hover:text-blue-600" aria-label="На главную">‹</a><div class="min-w-0"><p class="text-[10px] font-bold uppercase tracking-[0.14em] text-blue-600">SMILE CLINIC</p><h1 class="mt-0.5 truncate text-lg font-bold">Панель клиники</h1></div></div>
-      <button id="refresh-button" type="button" class="shrink-0 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-bold text-slate-600 transition hover:border-blue-300 hover:text-blue-600 focus:outline-none focus:ring-4 focus:ring-blue-100">↻ <span class="hidden sm:inline">Обновить</span></button>
+      <div class="flex min-w-0 items-center gap-3"><a href="index.html" class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-lg text-slate-500 transition hover:border-blue-300 hover:text-blue-600" aria-label="На главную">‹</a><div class="min-w-0"><p id="clinic-name" class="text-[10px] font-bold uppercase tracking-[0.14em] text-blue-600">КЛИНИКА</p><h1 class="mt-0.5 truncate text-lg font-bold">Панель клиники</h1></div></div>
+      <div class="flex items-center gap-2"><button id="logout-button" type="button" class="text-xs font-semibold text-blue-700">Выйти</button><button id="refresh-button" type="button" class="shrink-0 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-bold text-slate-600 transition hover:border-blue-300 hover:text-blue-600 focus:outline-none focus:ring-4 focus:ring-blue-100">↻ <span class="hidden sm:inline">Обновить</span></button></div>
     </header>
 
     <!-- Счётчики помогают быстро понять, сколько слотов занято и доступно. -->
@@ -284,14 +284,40 @@
       renderAppointments();
       appointmentSearch.focus();
     });
-    loadDashboard();
+    document.getElementById('logout-button').addEventListener('click', async () => {
+      try { await api('/api/logout', { method: 'POST', body: '{}' }); location.replace('account.html'); }
+      catch (error) { showPageError(error.message); }
+    });
+    async function startPanel() {
+      try {
+        const user = await api('/api/me');
+        if (user.role === 'admin') { location.replace('site-admin.html'); return; }
+        if (user.role !== 'clinic') { location.replace('account.html'); return; }
+        if (user.clinic_status !== 'approved') {
+          const main = document.querySelector('main');
+          const section = document.createElement('section'); section.className = 'mx-auto max-w-xl p-6';
+          const title = document.createElement('h1'); title.className = 'text-2xl font-bold';
+          title.textContent = user.clinic_status === 'pending' ? 'Заявка на проверке' : 'Заявка отклонена';
+          const text = document.createElement('p'); text.className = 'mt-3 text-slate-600';
+          text.textContent = user.clinic_status === 'pending' ? 'Владелец сайта проверит данные клиники. Расписание откроется после одобрения.' : 'Свяжитесь с владельцем сайта, если хотите уточнить решение.';
+          const name = document.createElement('p'); name.className = 'mt-2 font-semibold'; name.textContent = user.clinic_name;
+          const logout = document.createElement('button'); logout.className = 'mt-5 rounded-xl bg-blue-600 px-4 py-3 text-white'; logout.textContent = 'Выйти';
+          logout.onclick = async () => { await api('/api/logout', { method: 'POST', body: '{}' }); location.replace('account.html'); };
+          section.append(title, text, name, logout); main.replaceChildren(section); return;
+        }
+        document.getElementById('clinic-name').textContent = user.clinic_name;
+        await loadDashboard();
+      } catch (error) { location.replace('account.html?next=admin.html'); }
+    }
+    startPanel();
   </script>
   <!-- Панель клиники открывается из отдельного выбора «Для стоматологии». -->
   <nav class="bottom-nav" aria-label="Основная навигация">
     <a href="index.html" class="nav-item"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z"></path></svg><span>Главная</span></a>
-    <a href="index.html#clinics" class="nav-item"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21V7l9-4 9 4v14M3 11h18M8 11v10m8-10v10M9 7h.01M15 7h.01"></path></svg><span>Клиники</span></a>
+    <a href="clinics.html" class="nav-item"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21V7l9-4 9 4v14M3 11h18M8 11v10m8-10v10M9 7h.01M15 7h.01"></path></svg><span>Клиники</span></a>
     <a href="favorites.html" class="nav-item"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.8 8.7c0 5.1-8.8 11-8.8 11S3.2 13.8 3.2 8.7A4.7 4.7 0 0 1 12 6.4a4.7 4.7 0 0 1 8.8 2.3Z"></path></svg><span>Избранное</span></a>
     <a href="account.html" class="nav-item is-current" aria-current="page"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"></circle><path d="M4 21v-2a8 8 0 0 1 16 0v2z"></path></svg><span>Кабинет</span></a>
   </nav>
 </body>
 </html>
+

@@ -3,70 +3,27 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MedQueue — стоматологии Алматы</title>
+  <title>MedQueue — запись к стоматологу</title>
   <link rel="stylesheet" href="assets/site.css">
   <script src="https://cdn.tailwindcss.com"></script>
-  <script>
-    tailwind.config = {
-      theme: {
-        extend: {
-          colors: { brand: '#2563EB' },
-          boxShadow: { soft: '0 10px 30px rgba(15, 23, 42, 0.07)' }
-        }
-      }
-    }
-  </script>
   <style>
-    :root { color-scheme: light; --ink: #172334; --muted: #687586; --line: #e5e9ee; --blue: #1677d2; }
-    body { background: #f7f8fa !important; color: var(--ink) !important; font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
-    .site-shell { background: #fff !important; padding-bottom: 112px; }
-    .site-shell > header { padding-top: 16px; }
-    /* Знак обрезан из исходного логотипа и стоит рядом с текстовым названием. */
-    .brand-row { display: flex; min-height: 56px; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--line); padding-bottom: 10px; }
-    .brand-link { display: inline-flex; align-items: center; gap: 9px; color: inherit; text-decoration: none; }
-    .brand-symbol { position: relative; display: block; width: 58px; height: 42px; overflow: hidden; }
-    .brand-symbol img { position: absolute; top: -1px; left: -5px; width: 72px; max-width: none; height: auto; }
-    .brand-wordmark { display: flex; flex-direction: column; gap: 1px; }
-    .brand-name { color: #172334; font-size: 23px; font-weight: 750; letter-spacing: -.055em; line-height: 1; }
-    .brand-name span { color: #1677d2; }
-    .brand-tagline { color: #687586; font-size: 10px; line-height: 1.3; }
-    .city-label { display: inline-flex; align-items: center; gap: 5px; color: #586678; font-size: 12px; font-weight: 550; }
-    .city-label svg { width: 15px; height: 15px; fill: none; stroke: #1677d2; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
-    .intro { display: grid; gap: 24px; padding: 30px 0 24px; border-bottom: 1px solid var(--line); }
-    .eyebrow { margin: 0; color: var(--blue); font-size: 12px; font-weight: 650; letter-spacing: .04em; }
-    .intro h1 { margin: 8px 0 0; color: var(--ink); font-size: clamp(28px, 5vw, 42px); font-weight: 650; letter-spacing: -.035em; line-height: 1.12; }
-    .intro-note { max-width: 430px; margin: 12px 0 0; color: var(--muted); font-size: 15px; line-height: 1.55; }
-    /* Поиск и фильтры используют простые контуры вместо градиентов и теней. */
-    .search-field { display: flex; min-height: 48px; align-items: center; gap: 10px; padding: 0 14px; border: 1px solid #dce2e8; border-radius: 8px; background: #fff; color: #8591a0; }
-    .search-field:focus-within { border-color: var(--blue); box-shadow: 0 0 0 3px #1677d21a; }
-    .search-field svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; }
-    .search-field input { min-width: 0; flex: 1; border: 0; outline: 0; background: transparent; color: var(--ink); font-size: 14px; }
-    .site-shell section[aria-labelledby="services-title"], .site-shell section[aria-labelledby="clinics-title"] { margin-top: 26px; }
-    .site-shell h2 { font-size: 19px; font-weight: 620; letter-spacing: -.02em; }
-    .service-list { display: flex; flex-wrap: wrap; gap: 8px; }
-    .service-chip { padding: 9px 13px; border: 1px solid #dce2e8; border-radius: 999px; background: #fff; color: #455365; font-size: 13px; font-weight: 550; transition: border-color .15s, color .15s, background .15s; }
-    .service-chip:hover { border-color: #96bde2; }
-    .service-chip[aria-pressed="true"] { border-color: var(--blue); background: #f0f7fd; color: #1268b7; }
-    /* Карточки клиник сохраняют нужные статусы, но без декоративных заливок. */
-    [data-clinic] { border-color: var(--line) !important; border-radius: 10px !important; box-shadow: none !important; }
-    [data-clinic] > div:first-child { background: #f0f4f7 !important; }
-    [data-clinic] > div:first-child span { position: static; display: inline-block; margin-right: 16px; border-radius: 0; background: transparent !important; box-shadow: none !important; color: #526173; }
-    [data-clinic] a#clinic-link { border-radius: 7px !important; background: var(--blue) !important; box-shadow: none !important; }
-    @media (min-width: 640px) {
-      .site-shell > header { padding-top: 22px; }
-      .brand-symbol { width: 62px; height: 44px; }
-      .brand-symbol img { width: 76px; }
-      .brand-name { font-size: 25px; }
-      .brand-tagline { font-size: 11px; }
-      .intro { grid-template-columns: 1fr minmax(280px, 390px); align-items: end; padding: 48px 0 32px; }
-      .site-shell section[aria-labelledby="services-title"], .site-shell section[aria-labelledby="clinics-title"] { margin-top: 34px; }
-    }
+    body { font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    .brand-row { display:flex; min-height:56px; align-items:center; justify-content:space-between; border-bottom:1px solid #e5e9ee; padding:16px 0 10px; }
+    .brand-link { display:inline-flex; align-items:center; gap:9px; color:inherit; text-decoration:none; }
+    .brand-symbol { position:relative; display:block; width:58px; height:42px; overflow:hidden; }
+    .brand-symbol img { position:absolute; top:-1px; left:-5px; width:72px; max-width:none; height:auto; }
+    .brand-wordmark { display:flex; flex-direction:column; gap:1px; }
+    .brand-name { color:#172334; font-size:23px; font-weight:750; letter-spacing:-.055em; line-height:1; }
+    .brand-name span { color:#1677d2; }
+    .brand-tagline { color:#687586; font-size:10px; line-height:1.3; }
+    .city-label { display:inline-flex; align-items:center; gap:5px; color:#586678; font-size:12px; font-weight:550; }
+    .city-label svg { width:15px; height:15px; fill:none; stroke:#1677d2; stroke-width:1.7; stroke-linecap:round; stroke-linejoin:round; }
+    @media (min-width:640px) { .brand-symbol { width:62px; height:44px; } .brand-symbol img { width:76px; } .brand-name { font-size:25px; } .brand-tagline { font-size:11px; } }
   </style>
 </head>
 <body class="min-h-screen bg-slate-50 text-slate-900 antialiased">
-  <main id="home" class="site-shell mx-auto min-h-screen max-w-5xl bg-slate-50 px-4 pb-28 sm:px-6">
-    <!-- Шапка ставит знак и название рядом, а город оставляет отдельной подсказкой. -->
-    <header class="site-header">
+  <main class="mx-auto min-h-screen max-w-5xl bg-white px-4 pb-28 sm:px-6">
+    <header>
       <div class="brand-row">
         <a href="index.html" class="brand-link" aria-label="MedQueue, на главную">
           <span class="brand-symbol"><img src="assets/medqueue-logo.jpg" alt=""></span>
@@ -74,144 +31,36 @@
         </a>
         <span class="city-label"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 10c0 5-7 11-7 11S5 15 5 10a7 7 0 1 1 14 0Z"></path><circle cx="12" cy="10" r="2"></circle></svg>Алматы</span>
       </div>
-      <!-- Короткое описание продукта и поле поиска для фильтрации каталога. -->
-      <section class="intro mt-5"><div class="intro-copy"><p class="eyebrow">Стоматологии Алматы</p><h1>Забота о зубах<br>начинается с выбора</h1><p class="intro-note">Найдите клинику и удобное время для приёма рядом с вами.</p></div><label class="search-field"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"></circle><path d="m16 16 4 4"></path></svg><input id="clinic-search" type="search" placeholder="Клиника или адрес" aria-label="Поиск по клиникам"></label></section>
     </header>
-
-    <!-- Быстрые кнопки выбирают услугу и оставляют клиники с подходящими слотами. -->
-    <section class="mt-7" aria-labelledby="services-title">
-      <div class="flex items-end justify-between">
-        <div><p class="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400">Шаг 1</p><h2 id="services-title" class="mt-1 text-base font-bold">Какая услуга нужна?</h2></div>
-        <button id="clear-service" type="button" class="text-xs font-semibold text-blue-600">Сбросить</button>
+    <section class="grid gap-8 py-12 sm:grid-cols-2 sm:items-center sm:py-20">
+      <div>
+        <p class="text-xs font-bold uppercase tracking-widest text-blue-600">Запись к стоматологу онлайн</p>
+        <h1 class="mt-4 text-4xl font-bold leading-tight tracking-tight sm:text-5xl">Найдите врача и удобное время</h1>
+        <p class="mt-5 max-w-lg text-base leading-7 text-slate-600">MedQueue помогает выбрать стоматологическую клинику в Алматы и записаться на приём без звонков.</p>
+        <a href="clinics.html" class="mt-7 inline-flex items-center rounded-lg bg-blue-600 px-5 py-3 text-sm font-bold text-white hover:bg-blue-700">Посмотреть клиники <span class="ml-2">→</span></a>
       </div>
-      <div class="service-list mt-3" role="group" aria-label="Фильтр по услуге"><button type="button" data-service-filter="" aria-pressed="true" class="service-chip">Все услуги</button><button type="button" data-service-filter="Лечение кариеса" aria-pressed="false" class="service-chip">Лечение кариеса</button><button type="button" data-service-filter="Профессиональная чистка" aria-pressed="false" class="service-chip">Профессиональная чистка</button><button type="button" data-service-filter="Острая боль" aria-pressed="false" class="service-chip">Острая боль</button></div>
+      <div class="rounded-2xl border border-slate-200 bg-slate-50 p-6 sm:p-8">
+        <p class="text-sm font-bold text-slate-900">Как записаться</p>
+        <ol class="mt-5 space-y-5 text-sm text-slate-600">
+          <li class="flex gap-3"><span class="font-bold text-blue-600">01</span><span><strong class="text-slate-900">Выберите клинику</strong><br>Посмотрите адрес и доступные услуги.</span></li>
+          <li class="flex gap-3"><span class="font-bold text-blue-600">02</span><span><strong class="text-slate-900">Подберите время</strong><br>Откройте расписание и выберите свободный слот.</span></li>
+          <li class="flex gap-3"><span class="font-bold text-blue-600">03</span><span><strong class="text-slate-900">Подтвердите запись</strong><br>Запись сохранится в вашем личном кабинете.</span></li>
+        </ol>
+      </div>
     </section>
-
-    <!-- Каталог: у Smile Clinic данные расписания настоящие, остальные клиники пока без онлайн-записи. -->
-    <section id="clinics" class="mt-7" aria-labelledby="clinics-title">
-      <div class="flex items-end justify-between">
-        <div><p class="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400">Алматы · сегодня и ближайшие дни</p><h2 id="clinics-title" class="mt-1 text-base font-bold">Клиники рядом</h2></div>
-        <span id="clinic-count" class="text-xs font-semibold text-slate-500">Загрузка…</span>
-      </div>
-      <p id="results-message" class="mt-3 hidden rounded-xl border border-slate-200 bg-white p-4 text-xs leading-5 text-slate-500" role="status" aria-live="polite"></p>
-
-      <div id="clinic-cards" class="mt-4 space-y-3">
-        <article data-clinic data-name="smile clinic ул. достык алматы" data-bookable="true" class="overflow-hidden rounded-2xl border border-blue-100 bg-white shadow-soft">
-          <div class="relative h-32 bg-gradient-to-br from-blue-100 via-sky-50 to-indigo-100 p-4">
-            <span class="rounded-full bg-white/90 px-3 py-1.5 text-[11px] font-bold text-blue-700 shadow-sm">● Онлайн-запись</span>
-            <span class="absolute bottom-3 right-3 rounded-full bg-emerald-500 px-3 py-1 text-[10px] font-bold text-white shadow-sm">Открыто до 21:00</span>
-          </div>
-          <div class="p-4">
-            <div class="flex items-start justify-between gap-3">
-              <div><h3 class="font-bold">Smile Clinic</h3><p class="mt-1 text-xs text-slate-500">ул. Достык, 40 · 2.5 км</p></div>
-              <span class="text-xs font-semibold text-slate-600">Рейтинг 4,9</span>
-            </div>
-            <div class="mt-4 grid grid-cols-2 gap-3 border-t border-slate-100 pt-3">
-              <div><p class="text-[10px] text-slate-400">Стоимость от</p><p id="starting-price" class="mt-1 text-sm font-bold">—</p></div>
-              <div class="text-right"><p class="text-[10px] text-slate-400">Свободные слоты</p><p id="available-count" class="mt-1 text-sm font-bold text-emerald-600">Загрузка…</p></div>
-            </div>
-            <p id="clinic-load-error" class="mt-3 hidden text-[11px] text-rose-600" role="status"></p>
-            <a id="clinic-link" href="clinic.html" class="mt-4 flex w-full items-center justify-center rounded-xl bg-blue-600 px-4 py-3 text-sm font-bold text-white shadow-md shadow-blue-200 transition hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-200">Выбрать время <span class="ml-2">→</span></a>
-          </div>
-        </article>
-
-        <article data-clinic data-name="dentis plus проспект абая алматы" data-bookable="false" class="rounded-2xl border border-slate-200 bg-white p-4 opacity-90">
-          <div class="flex items-start justify-between gap-3"><div><h3 class="font-bold">Dentis Plus</h3><p class="mt-1 text-xs text-slate-500">пр. Абая, 18 · 3.1 км</p></div><span class="text-xs font-semibold text-slate-600">Рейтинг 4,8</span></div>
-          <div class="mt-3 flex items-center justify-between border-t border-slate-100 pt-3"><span class="text-[11px] text-slate-500">Онлайн-расписание скоро</span><span class="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-semibold text-slate-500">Пока без записи</span></div>
-        </article>
-
-        <article data-clinic data-name="city dental жибек жолы алматы" data-bookable="false" class="rounded-2xl border border-slate-200 bg-white p-4 opacity-90">
-          <div class="flex items-start justify-between gap-3"><div><h3 class="font-bold">City Dental</h3><p class="mt-1 text-xs text-slate-500">ул. Жибек Жолы, 67 · 4.8 км</p></div><span class="text-xs font-semibold text-slate-600">Рейтинг 4,7</span></div>
-          <div class="mt-3 flex items-center justify-between border-t border-slate-100 pt-3"><span class="text-[11px] text-slate-500">Онлайн-расписание скоро</span><span class="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-semibold text-slate-500">Пока без записи</span></div>
-        </article>
+    <section class="border-t border-slate-200 py-8">
+      <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div><h2 class="text-lg font-bold">Готовы выбрать время?</h2><p class="mt-1 text-sm text-slate-500">Список клиник и актуальное расписание — в каталоге.</p></div>
+        <a href="clinics.html" class="inline-flex justify-center rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:border-blue-400 hover:text-blue-700">Перейти к клиникам →</a>
       </div>
     </section>
   </main>
-  <!-- Четыре основных раздела доступны с любой страницы сайта. -->
   <nav class="bottom-nav" aria-label="Основная навигация">
     <a href="index.html" class="nav-item is-current" aria-current="page"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z"></path></svg><span>Главная</span></a>
-    <a href="index.html#clinics" class="nav-item"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21V7l9-4 9 4v14M3 11h18M8 11v10m8-10v10M9 7h.01M15 7h.01"></path></svg><span>Клиники</span></a>
+    <a href="clinics.html" class="nav-item"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21V7l9-4 9 4v14M3 11h18M8 11v10m8-10v10"></path></svg><span>Клиники</span></a>
     <a href="favorites.html" class="nav-item"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.8 8.7c0 5.1-8.8 11-8.8 11S3.2 13.8 3.2 8.7A4.7 4.7 0 0 1 12 6.4a4.7 4.7 0 0 1 8.8 2.3Z"></path></svg><span>Избранное</span></a>
     <a href="account.html" class="nav-item"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"></circle><path d="M4 21v-2a8 8 0 0 1 16 0v2z"></path></svg><span>Кабинет</span></a>
   </nav>
-  <script>
-    // Состояние фильтров и данные о свободном расписании клиники.
-    const searchInput = document.getElementById('clinic-search');
-    const clinicCards = [...document.querySelectorAll('[data-clinic]')];
-    const serviceButtons = [...document.querySelectorAll('[data-service-filter]')];
-    const countLabel = document.getElementById('clinic-count');
-    const resultsMessage = document.getElementById('results-message');
-    const clinicLink = document.getElementById('clinic-link');
-    let activeService = '';
-    let availableSlots = [];
-
-    // Одновременно применяем поиск и выбранную услугу, затем обновляем счётчик.
-    function applyFilters() {
-      const query = searchInput.value.trim().toLocaleLowerCase('ru');
-      const visibleCards = [];
-      clinicCards.forEach((card) => {
-        const matchesSearch = card.dataset.name.includes(query);
-        const matchesService = !activeService || (card.dataset.bookable === 'true' && availableSlots.some((slot) => slot.service === activeService));
-        card.hidden = !matchesSearch || !matchesService;
-        if (!card.hidden) visibleCards.push(card);
-      });
-      countLabel.textContent = `Найдено: ${visibleCards.length}`;
-      resultsMessage.classList.toggle('hidden', visibleCards.length > 0);
-      resultsMessage.textContent = activeService && !availableSlots.some((slot) => slot.service === activeService)
-        ? 'На выбранную услугу сейчас нет свободных слотов. Выберите другую услугу или сбросьте фильтр.'
-        : 'По этому запросу клиник не найдено. Попробуйте изменить поиск или сбросить фильтры.';
-      clinicLink.href = activeService ? `clinic.html?service=${encodeURIComponent(activeService)}` : 'clinic.html';
-    }
-
-    // Каждая кнопка услуги включает свой фильтр; повторно сбросить можно кнопкой «Все услуги».
-    serviceButtons.forEach((button) => {
-      button.addEventListener('click', () => {
-        activeService = button.dataset.serviceFilter;
-        serviceButtons.forEach((item) => {
-          const selected = item === button;
-          item.setAttribute('aria-pressed', String(selected));
-          item.classList.toggle('border-blue-600', selected);
-          item.classList.toggle('bg-blue-50', selected);
-          item.classList.toggle('text-blue-700', selected);
-          item.classList.toggle('border-slate-200', !selected);
-          item.classList.toggle('bg-white', !selected);
-          item.classList.toggle('text-slate-700', !selected);
-        });
-        applyFilters();
-      });
-    });
-    // Сброс очищает поиск, возвращает все карточки и переносит курсор в поиск.
-    document.getElementById('clear-service').addEventListener('click', () => {
-      searchInput.value = '';
-      serviceButtons.find((button) => button.dataset.serviceFilter === '')?.click();
-      searchInput.focus();
-    });
-    searchInput.addEventListener('input', applyFilters);
-
-    // Загружаем реальные слоты, чтобы показать актуальную цену и число свободных окон.
-    fetch('/api/slots')
-      .then((response) => response.json().then((data) => {
-        if (!response.ok) throw new Error(data.error || 'Не удалось загрузить расписание');
-        return data;
-      }))
-      .then((slots) => {
-        availableSlots = slots;
-        const count = slots.length;
-        const lastTwo = count % 100;
-        const last = count % 10;
-        const slotNoun = lastTwo >= 11 && lastTwo <= 14 ? 'окон' : last === 1 ? 'окно' : last >= 2 && last <= 4 ? 'окна' : 'окон';
-        document.getElementById('available-count').textContent = `${count} ${slotNoun}`;
-        document.getElementById('starting-price').textContent = slots.length ? `от ${Math.min(...slots.map((slot) => slot.price)).toLocaleString('ru-RU')} ₸` : 'уточните';
-        applyFilters();
-      })
-      .catch((error) => {
-        document.getElementById('available-count').textContent = 'недоступно';
-        const errorLabel = document.getElementById('clinic-load-error');
-        errorLabel.textContent = `${error.message}. Проверьте, что сервер запущен.`;
-        errorLabel.classList.remove('hidden');
-        applyFilters();
-      });
-    applyFilters();
-  </script>
 </body>
 </html>
+
