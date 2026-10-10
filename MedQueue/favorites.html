@@ -6,23 +6,85 @@
   <title>Избранное — MedQueue</title>
   <link rel="stylesheet" href="assets/site.css">
   <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .favorite-card { border:1px solid #e5e9ee; border-radius:9px; background:#fff; padding:17px; }
+    .favorite-card h2 { font-size:16px; font-weight:650; }
+    .favorite-meta { color:#687586; font-size:12px; line-height:1.5; }
+  </style>
 </head>
-<body class="min-h-screen bg-slate-100 text-slate-900 antialiased">
-  <main class="mx-auto min-h-screen max-w-2xl bg-white px-4 pb-28 sm:px-6">
-    <!-- Пока здесь нет сохранённых клиник; раздел оставлен для будущего избранного. -->
+<body class="min-h-screen bg-slate-50 text-slate-900 antialiased">
+  <main class="mx-auto min-h-screen max-w-5xl bg-white px-4 pb-28 sm:px-6">
     <header class="border-b border-slate-200 py-5">
       <a href="index.html" class="text-sm font-semibold text-blue-700">MedQueue</a>
-      <h1 class="mt-4 text-2xl font-semibold tracking-tight">Избранное</h1>
+      <h1 class="mt-4 text-2xl font-semibold tracking-tight">Избранные клиники</h1>
+      <p class="mt-1 text-sm text-slate-500">Сохранённые клиники и свободное время.</p>
     </header>
-    <p class="empty-state">Пока здесь пусто.</p>
+    <div id="message" class="mt-5 hidden rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600" role="status"></div>
+    <div id="clinic-list" class="mt-5 space-y-3"></div>
   </main>
-  <!-- Нижняя навигация остаётся доступной на всех страницах сайта. -->
   <nav class="bottom-nav" aria-label="Основная навигация">
     <a href="index.html" class="nav-item"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z"></path></svg><span>Главная</span></a>
-    <a href="clinics.html" class="nav-item"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21V7l9-4 9 4v14M3 11h18M8 11v10m8-10v10M9 7h.01M15 7h.01"></path></svg><span>Клиники</span></a>
+    <a href="clinics.html" class="nav-item"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21V7l9-4 9 4v14M3 11h18M8 11v10m8-10v10"></path></svg><span>Клиники</span></a>
     <a href="favorites.html" class="nav-item is-current" aria-current="page"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.8 8.7c0 5.1-8.8 11-8.8 11S3.2 13.8 3.2 8.7A4.7 4.7 0 0 1 12 6.4a4.7 4.7 0 0 1 8.8 2.3Z"></path></svg><span>Избранное</span></a>
     <a href="account.html" class="nav-item"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"></circle><path d="M4 21v-2a8 8 0 0 1 16 0v2z"></path></svg><span>Кабинет</span></a>
   </nav>
+  <script>
+    const list=document.getElementById('clinic-list');
+    const message=document.getElementById('message');
+    async function api(path,options={}){
+      const response=await fetch(path,{...options,headers:{'Content-Type':'application/json',...(options.headers||{})}});
+      const data=await response.json();
+      if(!response.ok)throw new Error(data.error||'Не удалось загрузить избранное');
+      return data;
+    }
+    function showMessage(text,linkText,linkHref){
+      message.replaceChildren(document.createTextNode(`${text} `));
+      if(linkText){const link=document.createElement('a');link.href=linkHref;link.className='font-semibold text-blue-700 underline';link.textContent=linkText;message.append(link)}
+      message.classList.remove('hidden');
+    }
+    async function load(){
+      try{
+        const user=await api('/api/me');
+        if(user.role!=='patient'){
+          showMessage('Избранное доступно в аккаунте пациента.','Открыть кабинет','account.html');return;
+        }
+        const [names,clinics,slots]=await Promise.all([api('/api/patient/favorites'),api('/api/clinics'),api('/api/slots')]);
+        const saved=names.map(name=>clinics.find(clinic=>clinic.name===name)||{name,address:'',phone:'',unlisted:true});
+        list.replaceChildren();
+        if(!saved.length){showMessage('Пока нет сохранённых клиник.','Посмотреть каталог','clinics.html');return}
+        message.classList.add('hidden');
+        saved.forEach(clinic=>{
+          const now=new Date();
+          const own=slots.filter(slot=>slot.clinic_name===clinic.name&&new Date(`${slot.date}T${slot.time}:00`)>now).sort((a,b)=>`${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`));
+          const card=document.createElement('article');card.className='favorite-card';
+          const top=document.createElement('div');top.className='flex items-start justify-between gap-3';
+          const info=document.createElement('div');info.className='min-w-0';
+          const title=document.createElement('h2');title.textContent=clinic.name;
+          const contact=[clinic.address,clinic.phone].filter(Boolean).join(' · ');
+          const address=document.createElement('p');address.className='favorite-meta mt-1';address.textContent=contact||'Контакты пока не указаны';
+          info.append(title,address);
+          const remove=document.createElement('button');remove.type='button';remove.className='shrink-0 text-xs font-semibold text-rose-700 hover:underline';remove.textContent='Убрать';
+          remove.onclick=async()=>{remove.disabled=true;try{await api(`/api/patient/favorites/${encodeURIComponent(clinic.name)}`,{method:'DELETE'});await load()}catch(error){showMessage(error.message);remove.disabled=false}};
+          top.append(info,remove);
+          const stats=document.createElement('p');stats.className='favorite-meta mt-3 border-t border-slate-100 pt-3';
+          const prices=own.map(slot=>Number(slot.price)).filter(price=>Number.isFinite(price)&&price>0);
+          const minPrice=prices.length?`${Math.min(...prices).toLocaleString('ru-RU')} ₸`:'нет цены';
+          const nearest=own.length?`${new Intl.DateTimeFormat('ru-RU',{day:'numeric',month:'short'}).format(new Date(`${own[0].date}T12:00:00`))} в ${own[0].time}`:'свободного времени пока нет';
+          stats.textContent=`Свободных слотов: ${own.length} · от ${minPrice} · ближайшее: ${nearest}`;
+          const footer=document.createElement('div');footer.className='mt-3 flex justify-end';
+          if(clinic.unlisted){
+            const note=document.createElement('p');note.className='text-xs text-slate-500';note.textContent='Клиника сейчас не публикует расписание.';footer.append(note);
+          }else{
+            const link=document.createElement('a');link.className='rounded-md bg-blue-600 px-4 py-2.5 text-xs font-semibold text-white hover:bg-blue-700';link.textContent='Открыть расписание →';link.href=`clinic.html?clinic_name=${encodeURIComponent(clinic.name)}`;footer.append(link);
+          }
+          card.append(top,stats,footer);list.append(card);
+        });
+      }catch(error){
+        if(error.message.includes('Войдите'))showMessage('Войдите в аккаунт пациента, чтобы сохранять клиники.','Войти или зарегистрироваться','account.html?next=favorites.html');
+        else showMessage(error.message);
+      }
+    }
+    load();
+  </script>
 </body>
 </html>
-

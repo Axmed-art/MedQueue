@@ -1,13 +1,99 @@
-<!DOCTYPE html><html lang="ru"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Админ-панель — MedQueue</title><link rel="stylesheet" href="assets/site.css"><script src="https://cdn.tailwindcss.com"></script></head>
-<body class="min-h-screen bg-slate-100 text-slate-900"><main class="mx-auto max-w-5xl px-4 pb-24"><header class="flex items-center justify-between py-6"><div><a href="index.html" class="text-sm font-semibold text-blue-700">MedQueue</a><h1 class="mt-2 text-2xl font-bold">Панель владельца сайта</h1></div><button id="logout" class="rounded-lg border bg-white px-3 py-2 text-sm">Выйти</button></header><div id="message" class="hidden rounded-xl bg-rose-50 p-3 text-sm text-rose-700"></div><section id="stats" class="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3"></section><section class="mt-8"><h2 class="text-xl font-bold">Заявки клиник</h2><div id="clinics" class="mt-3 space-y-3"></div></section><section class="mt-8"><h2 class="text-xl font-bold">Аккаунты</h2><div class="mt-3 overflow-x-auto rounded-xl border bg-white"><table class="w-full min-w-[600px] text-left text-sm"><thead class="bg-slate-50"><tr><th class="p-3">Имя / клиника</th><th class="p-3">Почта</th><th class="p-3">Телефон</th><th class="p-3">Тип</th><th class="p-3">Статус</th></tr></thead><tbody id="users"></tbody></table></div></section></main>
-<script>
-async function api(path,options={}){const r=await fetch(path,{...options,headers:{'Content-Type':'application/json',...(options.headers||{})}});const d=await r.json();if(!r.ok)throw new Error(d.error||'Запрос не выполнен');return d}
-const msg=document.getElementById('message');function error(e){msg.textContent=e.message;msg.classList.remove('hidden')}
-function stat(title,value){const card=document.createElement('article');card.className='rounded-xl border bg-white p-4';const a=document.createElement('p');a.className='text-xs text-slate-500';a.textContent=title;const b=document.createElement('p');b.className='mt-2 text-2xl font-bold';b.textContent=value;card.append(a,b);return card}
-async function load(){const [s,clinics,users]=await Promise.all([api('/api/admin/overview'),api('/api/admin/clinics'),api('/api/admin/users')]);document.getElementById('stats').replaceChildren(...[['Пациенты',s.patients],['Клиники',s.clinics],['На проверке',s.clinics_pending],['Одобрены',s.clinics_approved],['Записи',s.appointments],['Свободно / занято',`${s.slots_available} / ${s.slots_booked}`]].map(x=>stat(...x)));
-const list=document.getElementById('clinics');list.replaceChildren();clinics.forEach(c=>{const card=document.createElement('article');card.className='rounded-xl border bg-white p-4';const title=document.createElement('h3');title.className='font-bold';title.textContent=c.clinic_name;const detail=document.createElement('p');detail.className='mt-1 text-sm text-slate-600';detail.textContent=`${c.email} · ${c.phone} · ${c.clinic_address} · ${c.clinic_status==='pending'?'ожидает проверки':c.clinic_status==='approved'?'одобрена':'отклонена'}`;card.append(title,detail);if(c.clinic_status==='pending'){const actions=document.createElement('div');actions.className='mt-3 flex gap-2';[['Одобрить','approved'],['Отклонить','rejected']].forEach(([label,status])=>{const b=document.createElement('button');b.className=status==='approved'?'rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white':'rounded-lg bg-slate-200 px-3 py-2 text-sm font-semibold';b.textContent=label;b.onclick=async()=>{b.disabled=true;try{await api('/api/admin/clinic-decision',{method:'POST',body:JSON.stringify({clinic_id:c.id,status})});await load()}catch(e){error(e)}};actions.append(b)});card.append(actions)}list.append(card)});if(!clinics.length)list.textContent='Заявок клиник пока нет.';
-const body=document.getElementById('users');body.replaceChildren();users.forEach(u=>{const row=document.createElement('tr');row.className='border-t';[u.role==='clinic'?u.clinic_name:u.name,u.email,u.phone,u.role==='admin'?'Администратор':u.role==='clinic'?'Клиника':'Пациент',u.clinic_status||'—'].forEach(v=>{const cell=document.createElement('td');cell.className='p-3';cell.textContent=v||'—';row.append(cell)});body.append(row)})}
-document.getElementById('logout').onclick=async()=>{await api('/api/logout',{method:'POST',body:'{}'});location.replace('account.html')};
-api('/api/me').then(user=>{if(user.role!=='admin'){location.replace('account.html');return}load().catch(error)}).catch(()=>location.replace('account.html?next=site-admin.html'));
-</script></body></html>
-
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Панель владельца — MedQueue</title>
+  <link rel="stylesheet" href="assets/site.css">
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="min-h-screen bg-slate-100 text-slate-900">
+  <main class="mx-auto max-w-5xl px-4 pb-24">
+    <header class="flex items-center justify-between gap-3 py-6">
+      <div><a href="index.html" class="text-sm font-semibold text-blue-700">MedQueue</a><h1 class="mt-2 text-2xl font-bold">Панель владельца сайта</h1></div>
+      <div class="flex gap-2"><a href="index.html" class="rounded-lg border bg-white px-3 py-2 text-sm">Открыть сайт</a><button id="refresh" class="rounded-lg border bg-white px-3 py-2 text-sm">Обновить</button><button id="logout" class="rounded-lg border bg-white px-3 py-2 text-sm">Выйти</button></div>
+    </header>
+    <div id="message" class="hidden rounded-xl bg-rose-50 p-3 text-sm text-rose-700" role="alert"></div>
+    <section id="stats" class="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3" aria-label="Статистика сайта"></section>
+    <section class="mt-8">
+      <div class="flex flex-wrap items-end justify-between gap-3"><div><h2 class="text-xl font-bold">Клиники</h2><p class="mt-1 text-sm text-slate-500">Проверяйте заявки и управляйте их статусом.</p></div><label class="text-xs font-semibold text-slate-600">Показать<select id="clinic-filter" class="ml-2 rounded-lg border bg-white px-3 py-2 text-sm"><option value="all">Все</option><option value="pending">На проверке</option><option value="approved">Одобрены</option><option value="rejected">Отклонены</option></select></label></div>
+      <div id="clinics" class="mt-3 space-y-3"></div>
+    </section>
+    <section class="mt-8">
+      <div class="flex flex-wrap items-end justify-between gap-3"><div><h2 class="text-xl font-bold">Аккаунты</h2><p id="account-count" class="mt-1 text-sm text-slate-500"></p></div><label class="text-xs font-semibold text-slate-600">Поиск<input id="account-search" type="search" placeholder="Имя, почта или телефон" class="ml-2 rounded-lg border bg-white px-3 py-2 text-sm font-normal"></label></div>
+      <div class="mt-3 overflow-x-auto rounded-xl border bg-white"><table class="w-full min-w-[600px] text-left text-sm"><thead class="bg-slate-50"><tr><th class="p-3">Имя / клиника</th><th class="p-3">Почта</th><th class="p-3">Телефон</th><th class="p-3">Тип</th><th class="p-3">Статус</th></tr></thead><tbody id="users"></tbody></table></div>
+    </section>
+  </main>
+  <script>
+    async function api(path,options={}){
+      const response=await fetch(path,{...options,headers:{'Content-Type':'application/json',...(options.headers||{})}});
+      const data=await response.json();if(!response.ok)throw new Error(data.error||'Запрос не выполнен');return data;
+    }
+    const message=document.getElementById('message');
+    let allClinics=[],allUsers=[];
+    function showError(error){message.textContent=error.message;message.classList.remove('hidden')}
+    function stat(title,value){const card=document.createElement('article');card.className='rounded-xl border bg-white p-4';const label=document.createElement('p');label.className='text-xs text-slate-500';label.textContent=title;const number=document.createElement('p');number.className='mt-2 text-2xl font-bold';number.textContent=value;card.append(label,number);return card}
+    function statusName(status){return status==='pending'?'На проверке':status==='approved'?'Одобрена':'Отклонена'}
+    async function setClinicStatus(clinic,status,button){
+      button.disabled=true;
+      try{await api('/api/admin/clinic-decision',{method:'POST',body:JSON.stringify({clinic_id:clinic.id,status})});await load()}
+      catch(error){showError(error);button.disabled=false}
+    }
+    function renderClinics(){
+      const list=document.getElementById('clinics');list.replaceChildren();
+      const filter=document.getElementById('clinic-filter').value;
+      const clinics=allClinics.filter(clinic=>filter==='all'||clinic.clinic_status===filter);
+      if(!clinics.length){list.textContent=filter==='all'?'Заявок клиник пока нет.':'Клиник с таким статусом нет.';return}
+      clinics.forEach(clinic=>{
+        const card=document.createElement('article');card.className='rounded-xl border bg-white p-4';
+        const heading=document.createElement('div');heading.className='flex flex-wrap items-start justify-between gap-3';
+        const details=document.createElement('div');
+        const title=document.createElement('h3');title.className='font-bold';title.textContent=clinic.clinic_name;
+        const contact=document.createElement('p');contact.className='mt-1 text-sm text-slate-600';contact.textContent=[clinic.email,clinic.phone,clinic.clinic_address].filter(Boolean).join(' · ');
+        details.append(title,contact);
+        const status=document.createElement('span');status.className='rounded-md border px-2.5 py-1 text-xs text-slate-600';status.textContent=statusName(clinic.clinic_status);
+        heading.append(details,status);card.append(heading);
+        const actions=document.createElement('div');actions.className='mt-3 flex flex-wrap gap-2';
+        const choices=clinic.clinic_status==='pending'?[['Одобрить','approved'],['Отклонить','rejected']]:clinic.clinic_status==='rejected'?[['Вернуть на проверку','pending'],['Одобрить','approved']]:[];
+        choices.forEach(([label,nextStatus])=>{
+          const button=document.createElement('button');button.type='button';
+          button.className=nextStatus==='approved'?'rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white':'rounded-lg border px-3 py-2 text-sm font-semibold text-slate-700';
+          button.textContent=label;button.onclick=()=>setClinicStatus(clinic,nextStatus,button);actions.append(button);
+        });
+        if(actions.childElementCount)card.append(actions);
+        list.append(card);
+      });
+    }
+    function renderUsers(){
+      const query=document.getElementById('account-search').value.trim().toLocaleLowerCase('ru');
+      const filtered=allUsers.filter(user=>`${user.name} ${user.email} ${user.phone} ${user.clinic_name||''}`.toLocaleLowerCase('ru').includes(query));
+      const body=document.getElementById('users');body.replaceChildren();
+      document.getElementById('account-count').textContent=`Показано: ${filtered.length} из ${allUsers.length}`;
+      filtered.forEach(user=>{
+        const row=document.createElement('tr');row.className='border-t';
+        const type=user.role==='admin'?'Администратор':user.role==='clinic'?'Клиника':'Пациент';
+        [user.role==='clinic'?user.clinic_name:user.name,user.email,user.phone,type,user.clinic_status?statusName(user.clinic_status):'—'].forEach(value=>{const cell=document.createElement('td');cell.className='p-3';cell.textContent=value||'—';row.append(cell)});
+        body.append(row);
+      });
+      if(!filtered.length){const row=document.createElement('tr');const cell=document.createElement('td');cell.className='p-4 text-slate-500';cell.colSpan=5;cell.textContent='Аккаунты не найдены.';row.append(cell);body.append(row)}
+    }
+    async function load(){
+      document.getElementById('refresh').disabled=true;message.classList.add('hidden');
+      try{
+        const [summary,clinics,users]=await Promise.all([api('/api/admin/overview'),api('/api/admin/clinics'),api('/api/admin/users')]);
+        allClinics=clinics;allUsers=users;
+        document.getElementById('stats').replaceChildren(...[
+          ['Пациенты',summary.patients],['Клиники',summary.clinics],['На проверке',summary.clinics_pending],
+          ['Одобрены',summary.clinics_approved],['Записи',summary.appointments],['Свободно / занято',`${summary.slots_available} / ${summary.slots_booked}`],
+        ].map(([title,value])=>stat(title,value)));
+        renderClinics();renderUsers();
+      }catch(error){showError(error)}finally{document.getElementById('refresh').disabled=false}
+    }
+    document.getElementById('refresh').addEventListener('click',load);
+    document.getElementById('clinic-filter').addEventListener('change',renderClinics);
+    document.getElementById('account-search').addEventListener('input',renderUsers);
+    document.getElementById('logout').addEventListener('click',async()=>{await api('/api/logout',{method:'POST',body:'{}'});location.replace('account.html')});
+    api('/api/me').then(user=>{if(user.role!=='admin'){location.replace('account.html');return}load().catch(showError)}).catch(()=>location.replace('account.html?next=site-admin.html'));
+  </script>
+</body>
+</html>

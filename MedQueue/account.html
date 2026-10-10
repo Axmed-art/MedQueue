@@ -33,7 +33,7 @@
     </section>
     <section id="patient-view" class="mt-6 hidden">
       <div class="flex items-start justify-between gap-3"><div><p class="text-sm text-slate-500">Вы вошли как пациент</p><h2 id="patient-name" class="mt-1 text-xl font-bold"></h2><p id="patient-email" class="mt-1 text-sm text-slate-500"></p></div><button id="logout" class="rounded-lg border px-3 py-2 text-sm">Выйти</button></div>
-      <div class="mt-6 flex items-center justify-between"><h2 class="text-lg font-bold">Мои записи</h2><a href="index.html" class="text-sm font-semibold text-blue-700">Найти время</a></div><div id="appointments" class="mt-3 space-y-3"></div>
+      <div class="mt-6 flex items-center justify-between gap-3"><h2 class="text-lg font-bold">Мои записи</h2><a href="clinics.html" class="text-sm font-semibold text-blue-700">Найти время</a></div><a href="favorites.html" class="mt-3 inline-flex text-sm font-semibold text-blue-700">♡ Мои клиники</a><div id="appointments" class="mt-3 space-y-3"></div>
     </section>
   </main>
   <nav class="bottom-nav" aria-label="Основная навигация">
@@ -47,8 +47,31 @@
     async function api(path,options={}){const response=await fetch(path,{...options,headers:{'Content-Type':'application/json',...(options.headers||{})}});const data=await response.json();if(!response.ok)throw new Error(data.error||'Не удалось выполнить запрос');return data}
     function notice(text,bad=false){message.textContent=text;message.className=`mt-4 rounded-xl border p-3 text-sm ${bad?'border-rose-200 bg-rose-50 text-rose-700':'border-emerald-200 bg-emerald-50 text-emerald-800'}`}
     function goRole(user){if(user.role==='admin'){location.replace('site-admin.html');return}if(user.role==='clinic'){location.replace('admin.html');return}}
-    async function showPatient(user){authView.classList.add('hidden');patientView.classList.remove('hidden');document.getElementById('patient-name').textContent=user.name;document.getElementById('patient-email').textContent=user.email;const list=document.getElementById('appointments');try{const items=await api('/api/patient/appointments');list.replaceChildren();if(!items.length){list.textContent='Записей пока нет.';return}items.forEach(item=>{const card=document.createElement('article');card.className='rounded-xl border p-4';const title=document.createElement('p');title.className='font-semibold';title.textContent=item.slot.clinic_name;const detail=document.createElement('p');detail.className='mt-1 text-sm text-slate-600';detail.textContent=`${item.slot.service} · ${item.slot.date} · ${item.slot.time}`;card.append(title,detail);list.append(card)})}catch(e){notice(e.message,true)}}
-    function redirectNext(user){const next=new URLSearchParams(location.search).get('next')||'';if(user.role==='patient'&&/^booking\.html\?slot_id=\d+$/.test(next)){location.replace(next);return}goRole(user);if(user.role==='patient')showPatient(user)}
+    async function showPatient(user){
+      authView.classList.add('hidden');patientView.classList.remove('hidden');
+      document.getElementById('patient-name').textContent=user.name;
+      document.getElementById('patient-email').textContent=user.email;
+      const list=document.getElementById('appointments');
+      try{
+        const items=await api('/api/patient/appointments');list.replaceChildren();
+        if(!items.length){list.textContent='Записей пока нет.';return}
+        items.forEach(item=>{
+          const card=document.createElement('article');card.className='rounded-xl border border-slate-200 p-4';
+          const title=document.createElement('p');title.className='font-semibold';title.textContent=item.slot.clinic_name;
+          const detail=document.createElement('p');detail.className='mt-1 text-sm text-slate-600';detail.textContent=`${item.slot.service} · ${item.slot.date} · ${item.slot.time}`;
+          const price=document.createElement('p');price.className='mt-1 text-xs text-slate-500';price.textContent=`${item.slot.price.toLocaleString('ru-RU')} ₸`;
+          card.append(title,detail,price);
+          const appointmentAt=new Date(`${item.slot.date}T${item.slot.time}:00`);
+          if(appointmentAt>new Date()){
+            const cancel=document.createElement('button');cancel.type='button';cancel.className='mt-3 rounded-md border border-rose-200 px-3 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-50';cancel.textContent='Отменить запись';
+            cancel.onclick=async()=>{if(!confirm('Отменить эту запись? Время снова станет доступно.'))return;cancel.disabled=true;try{await api(`/api/patient/appointments/${item.id}`,{method:'DELETE'});await showPatient(user)}catch(error){notice(error.message,true);cancel.disabled=false}};
+            card.append(cancel);
+          }
+          list.append(card);
+        });
+      }catch(e){notice(e.message,true)}
+    }
+    function redirectNext(user){const next=new URLSearchParams(location.search).get('next')||'';if(user.role==='patient'&&(/^booking\.html\?slot_id=\d+$/.test(next)||['clinics.html','favorites.html'].includes(next))){location.replace(next);return}goRole(user);if(user.role==='patient')showPatient(user)}
     document.getElementById('login-tab').onclick=()=>{loginForm.classList.remove('hidden');registerForm.classList.add('hidden');document.getElementById('login-tab').className='rounded-lg bg-white px-3 py-2 text-sm font-semibold shadow-sm';document.getElementById('register-tab').className='rounded-lg px-3 py-2 text-sm font-semibold text-slate-500'};
     document.getElementById('register-tab').onclick=()=>{registerForm.classList.remove('hidden');loginForm.classList.add('hidden');document.getElementById('register-tab').className='rounded-lg bg-white px-3 py-2 text-sm font-semibold shadow-sm';document.getElementById('login-tab').className='rounded-lg px-3 py-2 text-sm font-semibold text-slate-500'};
     document.getElementById('role').onchange=e=>{const clinic=e.target.value==='clinic';document.getElementById('clinic-fields').classList.toggle('hidden',!clinic);document.getElementById('name-label').textContent=clinic?'Контактное лицо':'Имя и фамилия';registerForm.elements.clinic_name.required=clinic;registerForm.elements.clinic_address.required=clinic};

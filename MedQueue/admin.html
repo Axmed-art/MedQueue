@@ -33,13 +33,18 @@
       <form id="slot-form" class="mt-3 grid gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-soft sm:grid-cols-2 sm:p-5">
         <label class="text-xs font-bold">Услуга
           <select id="service" name="service" required class="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm font-normal outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100">
+            <option value="" selected disabled>Выберите услугу</option>
+            <option value="Первичная консультация">Первичная консультация</option>
             <option value="Лечение кариеса">Лечение кариеса</option>
             <option value="Профессиональная чистка">Профессиональная чистка</option>
-            <option value="Острая боль">Острая боль</option>
+            <option value="Ортопедическая стоматология">Ортопедическая стоматология</option>
+            <option value="Ортодонтия">Ортодонтия</option>
+            <option value="Хирургическая стоматология">Хирургическая стоматология</option>
+            <option value="Приём при острой боли">Приём при острой боли</option>
           </select>
         </label>
         <label class="text-xs font-bold">Цена, ₸
-          <input id="price" name="price" type="number" min="500" step="500" value="15000" required class="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm font-normal outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100">
+          <input id="price" name="price" type="number" min="500" step="500" placeholder="Укажите цену" required class="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm font-normal outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100">
         </label>
         <label class="text-xs font-bold">Дата
           <input id="slot-date" name="date" type="date" required class="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm font-normal outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100">
@@ -81,7 +86,7 @@
     const priceInput = document.getElementById('price');
     const appointmentSearch = document.getElementById('appointment-search');
     const appointmentService = document.getElementById('appointment-service');
-    const suggestedPrices = { 'Лечение кариеса': 15000, 'Профессиональная чистка': 12000, 'Острая боль': 8000 };
+    const suggestedPrices = { 'Лечение кариеса': 15000, 'Профессиональная чистка': 12000, 'Приём при острой боли': 8000 };
     const now = new Date();
     const localToday = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
     slotDate.min = localToday;
@@ -143,6 +148,7 @@
           button.className = 'shrink-0 rounded-lg border border-rose-100 px-3 py-2 text-[11px] font-semibold text-rose-600 transition hover:bg-rose-50';
           button.textContent = 'Удалить';
           button.addEventListener('click', async () => {
+            if (!confirm('Удалить это свободное время из расписания?')) return;
             button.disabled = true;
             try {
               await api(`/api/slots/${slot.id}`, { method: 'DELETE' });
@@ -207,6 +213,25 @@
         price.className = 'mt-1 text-[11px] text-slate-500';
         price.textContent = `${item.slot.price.toLocaleString('ru-RU')} ₸ · ${item.slot.clinic_name}`;
         card.append(top, detail, price);
+        const appointmentAt = new Date(`${item.slot.date}T${item.slot.time}:00`);
+        if (appointmentAt > new Date()) {
+          const cancel = document.createElement('button');
+          cancel.type = 'button';
+          cancel.className = 'mt-3 rounded-lg border border-rose-200 px-3 py-2 text-[11px] font-semibold text-rose-700 transition hover:bg-rose-50';
+          cancel.textContent = 'Отменить запись';
+          cancel.addEventListener('click', async () => {
+            if (!confirm(`Отменить запись пациента ${item.patient_name}? Время снова станет свободным.`)) return;
+            cancel.disabled = true;
+            try {
+              await api(`/api/clinic/appointments/${item.id}`, { method: 'DELETE' });
+              await loadDashboard();
+            } catch (error) {
+              showPageError(error.message);
+              cancel.disabled = false;
+            }
+          });
+          card.append(cancel);
+        }
         list.append(card);
       });
     }
@@ -264,7 +289,7 @@
         });
         showMessage(slotMessage, 'Свободное время добавлено.', false);
         slotForm.reset();
-        priceInput.value = '15000';
+        priceInput.value = suggestedPrices[serviceSelect.value] || '';
         await loadDashboard();
       } catch (error) {
         showMessage(slotMessage, error.message, true);

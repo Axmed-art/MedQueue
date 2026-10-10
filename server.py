@@ -109,6 +109,13 @@ def initialize_database() -> None:
                 account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
                 expires_at TEXT NOT NULL
             );
+
+            CREATE TABLE IF NOT EXISTS favorites (
+                patient_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+                clinic_name TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (patient_id, clinic_name)
+            );
             """
         )
 
@@ -118,6 +125,10 @@ def initialize_database() -> None:
         appointment_columns = {row["name"] for row in connection.execute("PRAGMA table_info(appointments)")}
         if "patient_id" not in appointment_columns:
             connection.execute("ALTER TABLE appointments ADD COLUMN patient_id INTEGER REFERENCES accounts(id)")
+        # Переименовываем старую демо-услугу, чтобы в каталоге везде было одно название.
+        connection.execute(
+            "UPDATE slots SET service='Приём при острой боли' WHERE service='Острая боль'"
+        )
 
         admin_email = os.environ.get("SITE_ADMIN_EMAIL", "").strip().lower()
         admin_password = os.environ.get("SITE_ADMIN_PASSWORD", "")
@@ -142,10 +153,10 @@ def initialize_database() -> None:
             demo_slots = [
                 ("Smile Clinic", "Лечение кариеса", tomorrow.isoformat(), "10:00", 15000),
                 ("Smile Clinic", "Профессиональная чистка", tomorrow.isoformat(), "12:30", 12000),
-                ("Smile Clinic", "Острая боль", tomorrow.isoformat(), "15:00", 8000),
+                ("Smile Clinic", "Приём при острой боли", tomorrow.isoformat(), "15:00", 8000),
                 ("Smile Clinic", "Лечение кариеса", day_after.isoformat(), "11:00", 15000),
                 ("Smile Clinic", "Профессиональная чистка", day_after.isoformat(), "14:00", 12000),
-                ("Smile Clinic", "Острая боль", day_after.isoformat(), "17:00", 8000),
+                ("Smile Clinic", "Приём при острой боли", day_after.isoformat(), "17:00", 8000),
             ]
             connection.executemany(
                 """INSERT INTO slots
@@ -344,6 +355,86 @@ class MedQueueHandler(BaseHTTPRequestHandler):
             ).fetchall()
         self.send_json(200, [self.appointment_record(row) for row in rows])
 
+    def get_patient_favorites(self, account_id: int) -> None:
+        with connect_db() as connection:
+            rows = connection.execute(
+                "SELECT clinic_name FROM favorites WHERE patient_id=? ORDER BY created_at DESC",
+                (account_id,),
+            ).fetchall()
+        self.send_json(200, [row["clinic_name"] for row in rows])
+
+    def save_patient_favorite(self, account_id: int) -> None:
+        try:
+            clinic_name = str(self.read_json().get("clinic_name", "")).strip()
+        except ValueError as error:
+            raise ApiError(400, str(error)) from error
+        if not clinic_name or len(clinic_name) > 160:
+            raise ApiError(400, "Выберите клинику")
+        with connect_db() as connection:
+            published = connection.execute(
+                """SELECT 1 FROM accounts WHERE role='clinic' AND clinic_status='approved'
+                   AND clinic_name=? COLLATE NOCASE
+                   UNION SELECT 1 FROM slots s WHERE s.clinic_name=? COLLATE NOCASE
+                   AND (s.owner_user_id IS NULL OR EXISTS (
+                       SELECT 1 FROM accounts c WHERE c.id=s.owner_user_id
+                       AND c.role='clinic' AND c.clinic_status='approved'
+                   )) LIMIT 1""",
+                (clinic_name, clinic_name),
+            ).fetchone()
+            if published is None:
+                raise ApiError(404, "Клиника больше недоступна")
+            connection.execute(
+                "INSERT OR IGNORE INTO favorites (patient_id,clinic_name) VALUES (?,?)",
+                (account_id, clinic_name),
+            )
+        self.send_json(200, {"clinic_name": clinic_name, "saved": True})
+
+    def remove_patient_favorite(self, account_id: int, clinic_name: str) -> None:
+        with connect_db() as connection:
+            connection.execute(
+                "DELETE FROM favorites WHERE patient_id=? AND clinic_name=? COLLATE NOCASE",
+                (account_id, clinic_name),
+            )
+        self.send_json(200, {"clinic_name": clinic_name, "saved": False})
+
+    def cancel_patient_appointment(self, appointment_id: int) -> None:
+        account = self.require_account("patient")
+        with connect_db() as connection:
+            row = connection.execute(
+                """SELECT a.id,s.appointment_date,s.appointment_time FROM appointments a
+                   JOIN slots s ON s.id=a.slot_id WHERE a.id=? AND a.patient_id=?""",
+                (appointment_id, account["id"]),
+            ).fetchone()
+            if row is None:
+                raise ApiError(404, "Запись не найдена")
+            appointment_at = datetime.combine(
+                date.fromisoformat(row["appointment_date"]),
+                datetime.strptime(row["appointment_time"], "%H:%M").time(),
+            )
+            if appointment_at <= datetime.now():
+                raise ApiError(409, "Прошедшую запись отменить нельзя")
+            connection.execute("DELETE FROM appointments WHERE id=?", (appointment_id,))
+        self.send_json(200, {"cancelled": True})
+
+    def cancel_clinic_appointment(self, appointment_id: int) -> None:
+        account = self.require_account("clinic", approved_clinic=True)
+        with connect_db() as connection:
+            row = connection.execute(
+                """SELECT a.id,s.appointment_date,s.appointment_time FROM appointments a
+                   JOIN slots s ON s.id=a.slot_id WHERE a.id=? AND s.owner_user_id=?""",
+                (appointment_id, account["id"]),
+            ).fetchone()
+            if row is None:
+                raise ApiError(404, "Запись не найдена в расписании вашей клиники")
+            appointment_at = datetime.combine(
+                date.fromisoformat(row["appointment_date"]),
+                datetime.strptime(row["appointment_time"], "%H:%M").time(),
+            )
+            if appointment_at <= datetime.now():
+                raise ApiError(409, "Прошедшую запись отменить нельзя")
+            connection.execute("DELETE FROM appointments WHERE id=?", (appointment_id,))
+        self.send_json(200, {"cancelled": True})
+
     def get_clinic_slots(self, account_id: int) -> None:
         with connect_db() as connection:
             rows = connection.execute(
@@ -399,7 +490,7 @@ class MedQueueHandler(BaseHTTPRequestHandler):
             status = str(data.get("status", ""))
         except (ValueError, TypeError) as error:
             raise ApiError(400, "Некорректная заявка") from error
-        if account_id < 1 or status not in {"approved", "rejected"}:
+        if account_id < 1 or status not in {"approved", "rejected", "pending"}:
             raise ApiError(400, "Некорректное решение")
         with connect_db() as connection:
             cursor = connection.execute(
@@ -431,6 +522,9 @@ class MedQueueHandler(BaseHTTPRequestHandler):
             elif path == "/api/patient/appointments":
                 account = self.require_account("patient")
                 self.get_patient_appointments(account["id"])
+            elif path == "/api/patient/favorites":
+                account = self.require_account("patient")
+                self.get_patient_favorites(account["id"])
             elif path == "/api/clinic/profile":
                 account = self.require_account("clinic")
                 self.send_json(200, self.account_record(account))
@@ -468,6 +562,9 @@ class MedQueueHandler(BaseHTTPRequestHandler):
                 self.create_slot()
             elif path == "/api/appointments":
                 self.create_appointment()
+            elif path == "/api/patient/favorites":
+                account = self.require_account("patient")
+                self.save_patient_favorite(account["id"])
             elif path == "/api/admin/clinic-decision":
                 self.decide_clinic()
             else:
@@ -479,9 +576,19 @@ class MedQueueHandler(BaseHTTPRequestHandler):
     def do_DELETE(self) -> None:
         path = urlsplit(self.path).path.rstrip("/")
         match = re.fullmatch(r"/api/slots/(\d+)", path)
+        patient_appointment = re.fullmatch(r"/api/patient/appointments/(\d+)", path)
+        clinic_appointment = re.fullmatch(r"/api/clinic/appointments/(\d+)", path)
+        favorite = re.fullmatch(r"/api/patient/favorites/(.+)", path)
         try:
             if match:
                 self.delete_slot(int(match.group(1)))
+            elif patient_appointment:
+                self.cancel_patient_appointment(int(patient_appointment.group(1)))
+            elif clinic_appointment:
+                self.cancel_clinic_appointment(int(clinic_appointment.group(1)))
+            elif favorite:
+                account = self.require_account("patient")
+                self.remove_patient_favorite(account["id"], unquote(favorite.group(1)))
             else:
                 self.send_json(404, {"error": "Маршрут не найден"})
         except ApiError as error:
