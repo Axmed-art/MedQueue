@@ -48,6 +48,7 @@
     .service-chip:hover { border-color: #96bde2; }
     .service-chip[aria-pressed="true"] { border-color: #b8d4eb; background: #f2f8fd; color: #1268b7; }
     .clinic-card { border: 1px solid var(--line); border-radius: 9px; background: #fff; padding: 17px; }
+    .clinic-card-photo { display: block; width: calc(100% + 34px); height: 158px; margin: -17px -17px 15px; border-radius: 9px 9px 0 0; object-fit: cover; }
     .clinic-card h3 { color: var(--ink); font-size: 16px; font-weight: 650; line-height: 1.35; }
     .clinic-meta { color: var(--muted); font-size: 12px; line-height: 1.5; }
     .clinic-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; border-top: 1px solid var(--line); margin-top: 14px; padding-top: 12px; }
@@ -132,6 +133,9 @@
           .filter(slot=>new Date(`${slot.date}T${slot.time}:00`)>=now)
           .sort((a,b)=>`${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`));
         const card=makeElement('article','clinic-card');
+        const photo=makeElement('img','clinic-card-photo');
+        photo.src=Number(clinic.id)%2===0?'assets/dental-reception.jpg':'assets/dental-room.jpg';
+        photo.alt='Интерьер стоматологической клиники'; photo.loading='lazy'; card.append(photo);
         const header=makeElement('div','flex items-start justify-between gap-4');
         const details=makeElement('div','min-w-0');
         details.append(makeElement('h3','',clinic.name));
