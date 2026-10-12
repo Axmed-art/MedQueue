@@ -81,12 +81,13 @@ def initialize_database() -> None:
                 UNIQUE (clinic_name, appointment_date, appointment_time)
             );
 
-            -- Одна запись занимает один слот; UNIQUE не допускает повторное бронирование.
+            -- Частичный уникальный индекс ниже резервирует слот только для активной записи.
             CREATE TABLE IF NOT EXISTS appointments (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                slot_id INTEGER NOT NULL UNIQUE REFERENCES slots(id) ON DELETE RESTRICT,
+                slot_id INTEGER NOT NULL REFERENCES slots(id) ON DELETE RESTRICT,
                 patient_name TEXT NOT NULL,
                 phone TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'confirmed' CHECK (status IN ('pending','confirmed','cancelled','completed')),
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             );
 
@@ -125,6 +126,30 @@ def initialize_database() -> None:
         appointment_columns = {row["name"] for row in connection.execute("PRAGMA table_info(appointments)")}
         if "patient_id" not in appointment_columns:
             connection.execute("ALTER TABLE appointments ADD COLUMN patient_id INTEGER REFERENCES accounts(id)")
+        if "status" not in appointment_columns:
+            # Replace the legacy UNIQUE(slot_id) table so cancelled times can be booked again.
+            connection.execute("ALTER TABLE appointments RENAME TO appointments_legacy")
+            connection.execute("""CREATE TABLE appointments (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                slot_id INTEGER NOT NULL REFERENCES slots(id) ON DELETE RESTRICT,
+                patient_name TEXT NOT NULL, phone TEXT NOT NULL,
+                patient_id INTEGER REFERENCES accounts(id),
+                status TEXT NOT NULL DEFAULT 'confirmed' CHECK (status IN ('pending','confirmed','cancelled','completed')),
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )""")
+            connection.execute("""INSERT INTO appointments (id,slot_id,patient_name,phone,patient_id,created_at)
+                SELECT id,slot_id,patient_name,phone,patient_id,created_at FROM appointments_legacy""")
+            connection.execute("DROP TABLE appointments_legacy")
+        connection.execute("CREATE UNIQUE INDEX IF NOT EXISTS one_active_appointment_per_slot ON appointments(slot_id) WHERE status IN ('pending','confirmed')")
+        connection.execute("""CREATE TABLE IF NOT EXISTS reviews (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            appointment_id INTEGER NOT NULL UNIQUE REFERENCES appointments(id) ON DELETE CASCADE,
+            patient_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+            clinic_name TEXT NOT NULL,
+            rating INTEGER NOT NULL CHECK (rating BETWEEN 1 AND 5),
+            comment TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )""")
         # Переименовываем старую демо-услугу, чтобы в каталоге везде было одно название.
         connection.execute(
             "UPDATE slots SET service='Приём при острой боли' WHERE service='Острая боль'"
@@ -336,9 +361,15 @@ class MedQueueHandler(BaseHTTPRequestHandler):
 
     @staticmethod
     def appointment_record(row: sqlite3.Row) -> dict:
+        status = row["status"]
+        appointment_at = datetime.combine(date.fromisoformat(row["appointment_date"]),
+                                          datetime.strptime(row["appointment_time"], "%H:%M").time())
+        if status == "confirmed" and appointment_at <= datetime.now():
+            status = "completed"
         return {
             "id": row["id"], "patient_name": row["patient_name"], "phone": row["phone"],
-            "created_at": row["created_at"],
+            "created_at": row["created_at"], "status": status,
+            "has_review": bool(row["has_review"]) if "has_review" in row.keys() else False,
             "slot": {"id": row["slot_id"], "clinic_name": row["clinic_name"],
                      "service": row["service"], "date": row["appointment_date"],
                      "time": row["appointment_time"], "price": row["price"]},
@@ -347,7 +378,9 @@ class MedQueueHandler(BaseHTTPRequestHandler):
     def get_patient_appointments(self, account_id: int) -> None:
         with connect_db() as connection:
             rows = connection.execute(
-                """SELECT a.id,a.patient_name,a.phone,a.created_at,s.id AS slot_id,s.clinic_name,
+                """SELECT a.id,a.patient_name,a.phone,a.created_at,a.status,
+                          EXISTS(SELECT 1 FROM reviews r WHERE r.appointment_id=a.id) AS has_review,
+                          s.id AS slot_id,s.clinic_name,
                           s.service,s.appointment_date,s.appointment_time,s.price
                    FROM appointments a JOIN slots s ON s.id=a.slot_id
                    WHERE a.patient_id=? ORDER BY s.appointment_date,s.appointment_time""",
@@ -401,7 +434,7 @@ class MedQueueHandler(BaseHTTPRequestHandler):
         account = self.require_account("patient")
         with connect_db() as connection:
             row = connection.execute(
-                """SELECT a.id,s.appointment_date,s.appointment_time FROM appointments a
+                """SELECT a.id,a.status,s.appointment_date,s.appointment_time FROM appointments a
                    JOIN slots s ON s.id=a.slot_id WHERE a.id=? AND a.patient_id=?""",
                 (appointment_id, account["id"]),
             ).fetchone()
@@ -411,16 +444,91 @@ class MedQueueHandler(BaseHTTPRequestHandler):
                 date.fromisoformat(row["appointment_date"]),
                 datetime.strptime(row["appointment_time"], "%H:%M").time(),
             )
-            if appointment_at <= datetime.now():
-                raise ApiError(409, "Прошедшую запись отменить нельзя")
-            connection.execute("DELETE FROM appointments WHERE id=?", (appointment_id,))
+            if row["status"] not in {"pending", "confirmed"}:
+                raise ApiError(409, "Эту запись уже нельзя отменить")
+            if appointment_at <= datetime.now() + timedelta(hours=2):
+                raise ApiError(409, "Отменить запись можно не позднее чем за 2 часа до приёма")
+            connection.execute("UPDATE appointments SET status='cancelled' WHERE id=?", (appointment_id,))
         self.send_json(200, {"cancelled": True})
+
+    def reschedule_patient_appointment(self, appointment_id: int) -> None:
+        account = self.require_account("patient")
+        try:
+            slot_id = int(self.read_json().get("slot_id", 0))
+            if slot_id <= 0:
+                raise ValueError
+        except (ValueError, TypeError) as error:
+            raise ApiError(400, "Выберите новое время") from error
+        with connect_db() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            appointment = connection.execute(
+                """SELECT a.status,s.appointment_date,s.appointment_time FROM appointments a
+                   JOIN slots s ON s.id=a.slot_id WHERE a.id=? AND a.patient_id=?""",
+                (appointment_id, account["id"]),
+            ).fetchone()
+            if appointment is None:
+                raise ApiError(404, "Запись не найдена")
+            old_at = datetime.combine(date.fromisoformat(appointment["appointment_date"]),
+                                      datetime.strptime(appointment["appointment_time"], "%H:%M").time())
+            if appointment["status"] not in {"pending", "confirmed"} or old_at <= datetime.now() + timedelta(hours=2):
+                raise ApiError(409, "Перенести запись можно не позднее чем за 2 часа до приёма")
+            slot = connection.execute("SELECT * FROM slots WHERE id=?", (slot_id,)).fetchone()
+            if slot is None:
+                raise ApiError(404, "Новое время не найдено")
+            new_at = datetime.combine(date.fromisoformat(slot["appointment_date"]),
+                                      datetime.strptime(slot["appointment_time"], "%H:%M").time())
+            if new_at <= datetime.now():
+                raise ApiError(409, "Нельзя выбрать прошедшее время")
+            try:
+                connection.execute("UPDATE appointments SET slot_id=?,status='confirmed' WHERE id=?",
+                                   (slot_id, appointment_id))
+            except sqlite3.IntegrityError as error:
+                raise ApiError(409, "Это время уже занято") from error
+        self.send_json(200, {"rescheduled": True})
+
+    def create_review(self, appointment_id: int) -> None:
+        account = self.require_account("patient")
+        try:
+            data = self.read_json()
+            rating = int(data.get("rating", 0))
+            comment = str(data.get("comment", "")).strip()
+            if rating not in range(1, 6) or len(comment) > 1000:
+                raise ValueError
+        except (ValueError, TypeError) as error:
+            raise ApiError(400, "Выберите оценку от 1 до 5; комментарий — до 1000 символов") from error
+        with connect_db() as connection:
+            appointment = connection.execute(
+                """SELECT a.id,a.status,s.clinic_name,s.appointment_date,s.appointment_time FROM appointments a
+                   JOIN slots s ON s.id=a.slot_id WHERE a.id=? AND a.patient_id=?""",
+                (appointment_id, account["id"]),
+            ).fetchone()
+            if appointment is None:
+                raise ApiError(404, "Запись не найдена")
+            if appointment["status"] == "cancelled":
+                raise ApiError(409, "Для отменённой записи нельзя оставить отзыв")
+            appointment_at = datetime.combine(date.fromisoformat(appointment["appointment_date"]),
+                                              datetime.strptime(appointment["appointment_time"], "%H:%M").time())
+            if appointment_at > datetime.now():
+                raise ApiError(409, "Оставить отзыв можно после приёма")
+            try:
+                connection.execute("""INSERT INTO reviews
+                    (appointment_id,patient_id,clinic_name,rating,comment) VALUES (?,?,?,?,?)""",
+                    (appointment_id, account["id"], appointment["clinic_name"], rating, comment))
+            except sqlite3.IntegrityError as error:
+                raise ApiError(409, "Вы уже оставили отзыв об этой записи") from error
+        self.send_json(201, {"saved": True})
+
+    def get_clinic_reviews(self, clinic_name: str) -> None:
+        with connect_db() as connection:
+            rows = connection.execute("""SELECT r.rating,r.comment,r.created_at
+                FROM reviews r WHERE r.clinic_name=? COLLATE NOCASE ORDER BY r.created_at DESC""", (clinic_name,)).fetchall()
+        self.send_json(200, [dict(row) for row in rows])
 
     def cancel_clinic_appointment(self, appointment_id: int) -> None:
         account = self.require_account("clinic", approved_clinic=True)
         with connect_db() as connection:
             row = connection.execute(
-                """SELECT a.id,s.appointment_date,s.appointment_time FROM appointments a
+                """SELECT a.id,a.status,s.appointment_date,s.appointment_time FROM appointments a
                    JOIN slots s ON s.id=a.slot_id WHERE a.id=? AND s.owner_user_id=?""",
                 (appointment_id, account["id"]),
             ).fetchone()
@@ -430,15 +538,16 @@ class MedQueueHandler(BaseHTTPRequestHandler):
                 date.fromisoformat(row["appointment_date"]),
                 datetime.strptime(row["appointment_time"], "%H:%M").time(),
             )
-            if appointment_at <= datetime.now():
-                raise ApiError(409, "Прошедшую запись отменить нельзя")
-            connection.execute("DELETE FROM appointments WHERE id=?", (appointment_id,))
+            if row["status"] not in {"pending", "confirmed"} or appointment_at <= datetime.now():
+                raise ApiError(409, "Эту запись уже нельзя отменить")
+            connection.execute("UPDATE appointments SET status='cancelled' WHERE id=?", (appointment_id,))
         self.send_json(200, {"cancelled": True})
 
     def get_clinic_slots(self, account_id: int) -> None:
         with connect_db() as connection:
             rows = connection.execute(
-                """SELECT s.*,EXISTS(SELECT 1 FROM appointments a WHERE a.slot_id=s.id) AS booked
+                """SELECT s.*,EXISTS(SELECT 1 FROM appointments a WHERE a.slot_id=s.id
+                   AND a.status IN ('pending','confirmed')) AS booked
                    FROM slots s WHERE s.owner_user_id=? ORDER BY s.appointment_date,s.appointment_time""",
                 (account_id,),
             ).fetchall()
@@ -447,10 +556,11 @@ class MedQueueHandler(BaseHTTPRequestHandler):
     def get_clinic_appointments(self, account_id: int) -> None:
         with connect_db() as connection:
             rows = connection.execute(
-                """SELECT a.id,a.patient_name,a.phone,a.created_at,s.id AS slot_id,s.clinic_name,
-                          s.service,s.appointment_date,s.appointment_time,s.price
+                """SELECT a.id,a.patient_name,a.phone,a.created_at,a.status,s.id AS slot_id,s.clinic_name,
+                   s.service,s.appointment_date,s.appointment_time,s.price
                    FROM appointments a JOIN slots s ON s.id=a.slot_id
-                   WHERE s.owner_user_id=? ORDER BY s.appointment_date,s.appointment_time""",
+                   WHERE s.owner_user_id=? AND a.status IN ('pending','confirmed')
+                   ORDER BY s.appointment_date,s.appointment_time""",
                 (account_id,),
             ).fetchall()
         self.send_json(200, [self.appointment_record(row) for row in rows])
@@ -463,8 +573,8 @@ class MedQueueHandler(BaseHTTPRequestHandler):
                 "clinics_pending": connection.execute("SELECT COUNT(*) FROM accounts WHERE role='clinic' AND clinic_status='pending'").fetchone()[0],
                 "clinics_approved": connection.execute("SELECT COUNT(*) FROM accounts WHERE role='clinic' AND clinic_status='approved'").fetchone()[0],
                 "appointments": connection.execute("SELECT COUNT(*) FROM appointments").fetchone()[0],
-                "slots_available": connection.execute("SELECT COUNT(*) FROM slots s WHERE NOT EXISTS(SELECT 1 FROM appointments a WHERE a.slot_id=s.id)").fetchone()[0],
-                "slots_booked": connection.execute("SELECT COUNT(*) FROM appointments").fetchone()[0],
+                "slots_available": connection.execute("SELECT COUNT(*) FROM slots s WHERE NOT EXISTS(SELECT 1 FROM appointments a WHERE a.slot_id=s.id AND a.status IN ('pending','confirmed'))").fetchone()[0],
+                "slots_booked": connection.execute("SELECT COUNT(*) FROM appointments WHERE status IN ('pending','confirmed')").fetchone()[0],
             }
         self.send_json(200, stats)
 
@@ -510,6 +620,11 @@ class MedQueueHandler(BaseHTTPRequestHandler):
                 self.get_slots(parse_qs(parsed.query))
             elif path == "/api/clinics":
                 self.get_clinics()
+            elif path == "/api/reviews":
+                clinic_name = parse_qs(parsed.query).get("clinic_name", [""])[0].strip()
+                if not clinic_name:
+                    raise ApiError(400, "Укажите клинику")
+                self.get_clinic_reviews(clinic_name)
             elif re.fullmatch(r"/api/slots/\d+", path):
                 self.get_slot(int(path.rsplit("/", 1)[1]))
             elif path == "/api/appointments":
@@ -562,6 +677,10 @@ class MedQueueHandler(BaseHTTPRequestHandler):
                 self.create_slot()
             elif path == "/api/appointments":
                 self.create_appointment()
+            elif re.fullmatch(r"/api/patient/appointments/\d+/reschedule", path):
+                self.reschedule_patient_appointment(int(path.split("/")[4]))
+            elif re.fullmatch(r"/api/patient/appointments/\d+/reviews", path):
+                self.create_review(int(path.split("/")[4]))
             elif path == "/api/patient/favorites":
                 account = self.require_account("patient")
                 self.save_patient_favorite(account["id"])
@@ -608,13 +727,13 @@ class MedQueueHandler(BaseHTTPRequestHandler):
         # По умолчанию скрываем занятые слоты; админка передаёт all=1.
         sql = """
             SELECT s.*, EXISTS(
-                SELECT 1 FROM appointments a WHERE a.slot_id = s.id
+                SELECT 1 FROM appointments a WHERE a.slot_id = s.id AND a.status IN ('pending','confirmed')
             ) AS booked
             FROM slots s
         """
         params: list = []
         if not include_booked:
-            sql += """ WHERE NOT EXISTS (SELECT 1 FROM appointments a WHERE a.slot_id = s.id)
+            sql += """ WHERE NOT EXISTS (SELECT 1 FROM appointments a WHERE a.slot_id = s.id AND a.status IN ('pending','confirmed'))
                        AND (s.owner_user_id IS NULL OR EXISTS (
                            SELECT 1 FROM accounts c WHERE c.id=s.owner_user_id
                            AND c.role='clinic' AND c.clinic_status='approved'
@@ -660,7 +779,7 @@ class MedQueueHandler(BaseHTTPRequestHandler):
         with connect_db() as connection:
             row = connection.execute(
                 """SELECT s.*, EXISTS(
-                       SELECT 1 FROM appointments a WHERE a.slot_id = s.id
+                       SELECT 1 FROM appointments a WHERE a.slot_id = s.id AND a.status IN ('pending','confirmed')
                    ) AS booked
                    FROM slots s WHERE s.id = ?""",
                 (slot_id,),
@@ -686,10 +805,10 @@ class MedQueueHandler(BaseHTTPRequestHandler):
             raise ApiError(403, "Войдите в аккаунт клиники")
         if account["role"] == "clinic" and account["clinic_status"] != "approved":
             raise ApiError(403, "Заявка клиники ещё не одобрена")
-        scope = "WHERE s.owner_user_id=?" if account["role"] == "clinic" else ""
+        scope = "WHERE a.status IN ('pending','confirmed') AND s.owner_user_id=?" if account["role"] == "clinic" else "WHERE a.status IN ('pending','confirmed')"
         with connect_db() as connection:
             rows = connection.execute(
-                f"""SELECT a.id, a.patient_name, a.phone, a.created_at,
+                f"""SELECT a.id, a.patient_name, a.phone, a.created_at,a.status,
                           s.id AS slot_id, s.clinic_name, s.service,
                           s.appointment_date, s.appointment_time, s.price
                    FROM appointments a JOIN slots s ON s.id = a.slot_id {scope}
@@ -739,7 +858,7 @@ class MedQueueHandler(BaseHTTPRequestHandler):
             raise ApiError(403, "Войдите в аккаунт клиники")
         with connect_db() as connection:
             row = connection.execute(
-                "SELECT EXISTS(SELECT 1 FROM appointments WHERE slot_id = ?)", (slot_id,)
+                "SELECT EXISTS(SELECT 1 FROM appointments WHERE slot_id = ? AND status IN ('pending','confirmed'))", (slot_id,)
             ).fetchone()
             exists = connection.execute("SELECT owner_user_id FROM slots WHERE id = ?", (slot_id,)).fetchone()
             if exists is None:

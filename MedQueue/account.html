@@ -60,12 +60,43 @@
           const title=document.createElement('p');title.className='font-semibold';title.textContent=item.slot.clinic_name;
           const detail=document.createElement('p');detail.className='mt-1 text-sm text-slate-600';detail.textContent=`${item.slot.service} · ${item.slot.date} · ${item.slot.time}`;
           const price=document.createElement('p');price.className='mt-1 text-xs text-slate-500';price.textContent=`${item.slot.price.toLocaleString('ru-RU')} ₸`;
-          card.append(title,detail,price);
+          const statusNames={pending:'Ожидает подтверждения',confirmed:'Подтверждена',cancelled:'Отменена',completed:'Завершена'};
+          const status=document.createElement('p');status.className=`mt-2 text-xs font-semibold ${item.status==='cancelled'?'text-rose-600':'text-blue-700'}`;status.textContent=`Статус: ${statusNames[item.status]||'Подтверждена'}`;
+          card.append(title,detail,price,status);
           const appointmentAt=new Date(`${item.slot.date}T${item.slot.time}:00`);
-          if(appointmentAt>new Date()){
+          const hoursLeft=(appointmentAt-new Date())/3600000;
+          if(item.status==='confirmed'&&hoursLeft>0&&hoursLeft<=24){
+            const reminder=document.createElement('p');reminder.className='mt-3 rounded-lg bg-amber-50 p-3 text-xs text-amber-800';
+            reminder.textContent=hoursLeft<=2?'Напоминание: приём скоро.':'Напоминание: приём в ближайшие 24 часа.';card.append(reminder);
+          }
+          if(item.status==='confirmed'&&hoursLeft>2){
             const cancel=document.createElement('button');cancel.type='button';cancel.className='mt-3 rounded-md border border-rose-200 px-3 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-50';cancel.textContent='Отменить запись';
             cancel.onclick=async()=>{if(!confirm('Отменить эту запись? Время снова станет доступно.'))return;cancel.disabled=true;try{await api(`/api/patient/appointments/${item.id}`,{method:'DELETE'});await showPatient(user)}catch(error){notice(error.message,true);cancel.disabled=false}};
             card.append(cancel);
+            const reschedule=document.createElement('button');reschedule.type='button';reschedule.className='ml-2 mt-3 rounded-md border border-blue-200 px-3 py-2 text-xs font-semibold text-blue-700 hover:bg-blue-50';reschedule.textContent='Перенести';
+            reschedule.onclick=async()=>{
+              reschedule.disabled=true;
+              try{
+                const slots=await api(`/api/slots?clinic_name=${encodeURIComponent(item.slot.clinic_name)}`);
+                const options=slots.filter(slot=>slot.service===item.slot.service);
+                if(!options.length){notice('Для этой клиники и услуги пока нет свободного времени.',true);reschedule.disabled=false;return}
+                const form=document.createElement('form');form.className='mt-3 flex flex-wrap gap-2';
+                const select=document.createElement('select');select.className='min-w-0 flex-1 rounded-lg border border-slate-200 px-3 py-2 text-xs';
+                options.forEach(slot=>select.add(new Option(`${slot.date} · ${slot.time}`,String(slot.id))));
+                const save=document.createElement('button');save.type='submit';save.className='rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white';save.textContent='Сохранить время';form.append(select,save);
+                form.onsubmit=async event=>{event.preventDefault();save.disabled=true;try{await api(`/api/patient/appointments/${item.id}/reschedule`,{method:'POST',body:JSON.stringify({slot_id:Number(select.value)})});notice('Время записи изменено.');await showPatient(user)}catch(error){notice(error.message,true);save.disabled=false}};
+                card.append(form);
+              }catch(error){notice(error.message,true);reschedule.disabled=false}
+            };
+            card.append(reschedule);
+          }
+          if(item.status==='completed'&&!item.has_review){
+            const form=document.createElement('form');form.className='mt-3 space-y-2 border-t border-slate-100 pt-3';
+            const heading=document.createElement('p');heading.className='text-xs font-semibold';heading.textContent='Оцените визит';
+            const rating=document.createElement('select');rating.required=true;rating.className='rounded-lg border border-slate-200 px-3 py-2 text-xs';rating.add(new Option('Оценка',''));for(let value=5;value>=1;value--)rating.add(new Option(`${value} ★`,String(value)));
+            const comment=document.createElement('textarea');comment.maxLength=1000;comment.placeholder='Комментарий (необязательно)';comment.className='block w-full rounded-lg border border-slate-200 px-3 py-2 text-xs';
+            const submit=document.createElement('button');submit.type='submit';submit.className='rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white';submit.textContent='Оставить отзыв';
+            form.append(heading,rating,comment,submit);form.onsubmit=async event=>{event.preventDefault();submit.disabled=true;try{await api(`/api/patient/appointments/${item.id}/reviews`,{method:'POST',body:JSON.stringify({rating:Number(rating.value),comment:comment.value})});notice('Спасибо за отзыв!');await showPatient(user)}catch(error){notice(error.message,true);submit.disabled=false}};card.append(form);
           }
           list.append(card);
         });

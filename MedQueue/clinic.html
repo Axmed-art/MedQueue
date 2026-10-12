@@ -33,6 +33,11 @@
       <div class="p-4"><div class="flex items-start justify-between gap-3"><div><h2 id="selected-clinic-name" class="text-sm font-bold">Выберите клинику</h2><p id="selected-clinic-address" class="mt-1 text-xs text-slate-500"></p><p id="selected-clinic-phone" class="mt-2 text-xs text-slate-600"></p></div><span class="rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-bold text-emerald-700">Онлайн-запись</span></div></div>
     </section>
 
+    <section id="clinic-reviews" class="mt-4 rounded-2xl border border-slate-200 bg-white p-4" aria-label="Отзывы пациентов">
+      <div class="flex items-center justify-between gap-2"><h2 class="text-sm font-bold">Отзывы пациентов</h2><span id="review-summary" class="text-xs text-slate-500">Пока нет отзывов</span></div>
+      <div id="review-list" class="mt-3 space-y-3"></div>
+    </section>
+
     <section class="mt-6" aria-labelledby="doctor-title">
       <div class="flex items-end justify-between"><div><p class="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400">Специалист</p><h2 id="doctor-title" class="mt-1 text-sm font-bold">Ваш врач</h2></div></div>
       <div class="mt-3 flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-3"><div class="flex h-11 w-11 items-center justify-center rounded-full bg-blue-50 text-lg">👩🏻‍⚕️</div><div><h3 class="text-sm font-bold">Анна Петрова</h3><p class="mt-1 text-[11px] text-slate-500">Стоматолог-терапевт · стаж 8 лет</p></div></div>
@@ -47,6 +52,7 @@
       <label class="mt-4 block text-xs font-semibold text-slate-700">Услуга
         <select id="service-filter" class="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm font-normal outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"><option value="">Загружаем услуги…</option></select>
       </label>
+      <div id="date-calendar" class="mt-3 flex gap-2 overflow-x-auto pb-1" aria-label="Выбор даты приёма"></div>
       <div id="slot-list" class="mt-4 space-y-4"></div>
       <div id="slot-state" class="mt-4 hidden rounded-xl border border-slate-200 bg-white p-4 text-xs leading-5 text-slate-500" role="status" aria-live="polite"></div>
       <button id="retry-slots" type="button" class="mt-3 hidden w-full rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-xs font-bold text-blue-700 transition hover:bg-blue-100">Загрузить расписание ещё раз</button>
@@ -80,6 +86,7 @@
     const clinicName = params.get('clinic_name') || '';
     let availableSlots = [];
     let selectedSlotId = null;
+    let selectedDate = '';
 
     // Формат даты для заголовков групп и сводки записи.
     function formatDate(value) {
@@ -111,7 +118,20 @@
 
     // Рисуем список слотов по датам; radio-группа позволяет выбрать ровно один слот.
     function renderSlots() {
-      const filtered = availableSlots.filter((slot) => !serviceFilter.value || slot.service === serviceFilter.value);
+      const byService = availableSlots.filter((slot) => !serviceFilter.value || slot.service === serviceFilter.value);
+      const dates = [...new Set(byService.map((slot) => slot.date))];
+      if (selectedDate && !dates.includes(selectedDate)) selectedDate = '';
+      const calendar = document.getElementById('date-calendar');
+      calendar.replaceChildren();
+      const addDateButton = (label, value) => {
+        const button = document.createElement('button'); button.type = 'button';
+        button.className = `shrink-0 rounded-xl border px-3 py-2 text-[11px] font-semibold ${selectedDate === value ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-200 bg-white text-slate-600'}`;
+        button.textContent = label; button.setAttribute('aria-pressed', String(selectedDate === value));
+        button.onclick = () => { selectedDate = value; renderSlots(); }; calendar.append(button);
+      };
+      if (dates.length > 1) addDateButton('Все даты', '');
+      dates.forEach((date) => addDateButton(formatDate(date), date));
+      const filtered = byService.filter((slot) => !selectedDate || slot.date === selectedDate);
       slotList.replaceChildren();
       slotState.classList.add('hidden');
       retryButton.classList.add('hidden');
@@ -199,6 +219,22 @@
         document.getElementById('selected-clinic-name').textContent = clinic?.name || clinicName;
         document.getElementById('selected-clinic-address').textContent = clinic?.address || '';
         document.getElementById('selected-clinic-phone').textContent = clinic?.phone || '';
+        const reviewResponse = await fetch(`/api/reviews?clinic_name=${encodeURIComponent(clinic?.name || clinicName)}`);
+        const reviews = await reviewResponse.json();
+        if (reviewResponse.ok) {
+          const reviewList = document.getElementById('review-list');
+          reviewList.replaceChildren();
+          if (reviews.length) {
+            const average = reviews.reduce((sum, review) => sum + review.rating, 0) / reviews.length;
+            document.getElementById('review-summary').textContent = `★ ${average.toFixed(1)} · ${reviews.length} отзыв(ов)`;
+            reviews.slice(0, 5).forEach(review => {
+              const item = document.createElement('article'); item.className = 'border-t border-slate-100 pt-3';
+              const author = document.createElement('p'); author.className = 'text-xs font-semibold'; author.textContent = `Оценка · ${'★'.repeat(review.rating)}`;
+              const comment = document.createElement('p'); comment.className = 'mt-1 text-xs leading-5 text-slate-600'; comment.textContent = review.comment || 'Без комментария';
+              item.append(author, comment); reviewList.append(item);
+            });
+          }
+        }
       }
       loadSlots();
     }

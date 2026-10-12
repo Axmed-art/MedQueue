@@ -204,7 +204,7 @@
         identity.append(name, phone);
         const badge = document.createElement('span');
         badge.className = 'shrink-0 rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-bold text-emerald-700';
-        badge.textContent = 'Подтверждена';
+        badge.textContent = item.status === 'pending' ? 'Ожидает подтверждения' : item.status === 'completed' ? 'Завершена' : 'Подтверждена';
         top.append(identity, badge);
         const detail = document.createElement('p');
         detail.className = 'mt-3 border-t border-slate-100 pt-3 text-xs font-semibold';
