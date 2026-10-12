@@ -163,13 +163,18 @@ def initialize_database() -> None:
             admin_email = admin_email or "admin@medqueue.local"
             admin_password = admin_password or "MedQueue123!"
         if admin_email and admin_password:
-            exists = connection.execute("SELECT 1 FROM accounts WHERE email=? COLLATE NOCASE", (admin_email,)).fetchone()
-            if not exists:
-                salt, digest = password_digest(admin_password)
-                connection.execute(
-                    "INSERT INTO accounts (name,email,phone,password_salt,password_hash,role) VALUES (?,?, '', ?, ?, 'admin')",
-                    ("Администратор MedQueue", admin_email, salt, digest),
-                )
+            salt, digest = password_digest(admin_password)
+            connection.execute(
+                """INSERT INTO accounts (name,email,phone,password_salt,password_hash,role)
+                   VALUES (?, ?, '', ?, ?, 'admin')
+                   ON CONFLICT(email) DO UPDATE SET
+                     name=excluded.name, password_salt=excluded.password_salt,
+                     password_hash=excluded.password_hash, role='admin',
+                     clinic_name=NULL, clinic_address=NULL, clinic_status=NULL""",
+                ("Администратор MedQueue", admin_email, salt, digest),
+            )
+        elif hosted:
+            print("ВНИМАНИЕ: задайте SITE_ADMIN_EMAIL и SITE_ADMIN_PASSWORD в Render → Environment, чтобы включить панель владельца.")
 
         # Тестовое расписание нужно для первого показа; существующую базу не перезаписываем.
         if is_new_database:
