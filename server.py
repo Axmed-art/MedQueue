@@ -11,7 +11,7 @@ import re
 import secrets
 import sqlite3
 from contextlib import contextmanager
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Iterator
@@ -63,8 +63,9 @@ def connect_db() -> Iterator[sqlite3.Connection]:
         connection.close()
 
 
-# Создаём таблицы при запуске.
+# Создаём таблицы при запуске; демо-слоты добавляются только в новую базу.
 def initialize_database() -> None:
+    is_new_database = not DATABASE.exists()
     with connect_db() as connection:
         connection.executescript(
             """
@@ -122,8 +123,6 @@ def initialize_database() -> None:
         slot_columns = {row["name"] for row in connection.execute("PRAGMA table_info(slots)")}
         if "owner_user_id" not in slot_columns:
             connection.execute("ALTER TABLE slots ADD COLUMN owner_user_id INTEGER REFERENCES accounts(id)")
-        if "doctor_name" not in slot_columns:
-            connection.execute("ALTER TABLE slots ADD COLUMN doctor_name TEXT NOT NULL DEFAULT ''")
         appointment_columns = {row["name"] for row in connection.execute("PRAGMA table_info(appointments)")}
         if "patient_id" not in appointment_columns:
             connection.execute("ALTER TABLE appointments ADD COLUMN patient_id INTEGER REFERENCES accounts(id)")
@@ -177,11 +176,24 @@ def initialize_database() -> None:
         elif hosted:
             print("ВНИМАНИЕ: задайте SITE_ADMIN_EMAIL и SITE_ADMIN_PASSWORD в Render → Environment, чтобы включить панель владельца.")
 
-        # Удаляем старые демо-слоты Smile Clinic без зарегистрированной клиники.
-        demo_slots = "SELECT id FROM slots WHERE owner_user_id IS NULL AND clinic_name='Smile Clinic' COLLATE NOCASE"
-        connection.execute(f"DELETE FROM appointments WHERE slot_id IN ({demo_slots})")
-        connection.execute("DELETE FROM slots WHERE owner_user_id IS NULL AND clinic_name='Smile Clinic' COLLATE NOCASE")
-        connection.execute("DELETE FROM favorites WHERE clinic_name='Smile Clinic' COLLATE NOCASE")
+        # Тестовое расписание нужно для первого показа; существующую базу не перезаписываем.
+        if is_new_database:
+            tomorrow = date.today() + timedelta(days=1)
+            day_after = date.today() + timedelta(days=2)
+            demo_slots = [
+                ("Smile Clinic", "Лечение кариеса", tomorrow.isoformat(), "10:00", 15000),
+                ("Smile Clinic", "Профессиональная чистка", tomorrow.isoformat(), "12:30", 12000),
+                ("Smile Clinic", "Приём при острой боли", tomorrow.isoformat(), "15:00", 8000),
+                ("Smile Clinic", "Лечение кариеса", day_after.isoformat(), "11:00", 15000),
+                ("Smile Clinic", "Профессиональная чистка", day_after.isoformat(), "14:00", 12000),
+                ("Smile Clinic", "Приём при острой боли", day_after.isoformat(), "17:00", 8000),
+            ]
+            connection.executemany(
+                """INSERT INTO slots
+                   (clinic_name, service, appointment_date, appointment_time, price)
+                   VALUES (?, ?, ?, ?, ?)""",
+                demo_slots,
+            )
 
 
 # Преобразуем строку SQLite в JSON-объект для страниц сайта.
@@ -189,7 +201,6 @@ def slot_record(row: sqlite3.Row, booked: bool = False) -> dict:
     return {
         "id": row["id"],
         "clinic_name": row["clinic_name"],
-        "doctor_name": row["doctor_name"] if "doctor_name" in row.keys() else "",
         "service": row["service"],
         "date": row["appointment_date"],
         "time": row["appointment_time"],
@@ -364,7 +375,7 @@ class MedQueueHandler(BaseHTTPRequestHandler):
             "id": row["id"], "patient_name": row["patient_name"], "phone": row["phone"],
             "created_at": row["created_at"], "status": status,
             "has_review": bool(row["has_review"]) if "has_review" in row.keys() else False,
-            "slot": {"id": row["slot_id"], "clinic_name": row["clinic_name"], "doctor_name": row["doctor_name"],
+            "slot": {"id": row["slot_id"], "clinic_name": row["clinic_name"],
                      "service": row["service"], "date": row["appointment_date"],
                      "time": row["appointment_time"], "price": row["price"]},
         }
@@ -374,7 +385,7 @@ class MedQueueHandler(BaseHTTPRequestHandler):
             rows = connection.execute(
                 """SELECT a.id,a.patient_name,a.phone,a.created_at,a.status,
                           EXISTS(SELECT 1 FROM reviews r WHERE r.appointment_id=a.id) AS has_review,
-                          s.id AS slot_id,s.clinic_name,s.doctor_name,
+                          s.id AS slot_id,s.clinic_name,
                           s.service,s.appointment_date,s.appointment_time,s.price
                    FROM appointments a JOIN slots s ON s.id=a.slot_id
                    WHERE a.patient_id=? ORDER BY s.appointment_date,s.appointment_time""",
@@ -551,7 +562,7 @@ class MedQueueHandler(BaseHTTPRequestHandler):
         with connect_db() as connection:
             rows = connection.execute(
                 """SELECT a.id,a.patient_name,a.phone,a.created_at,a.status,s.id AS slot_id,s.clinic_name,
-                   s.service,s.appointment_date,s.appointment_time,s.price,s.doctor_name
+                   s.service,s.appointment_date,s.appointment_time,s.price
                    FROM appointments a JOIN slots s ON s.id=a.slot_id
                    WHERE s.owner_user_id=? AND a.status IN ('pending','confirmed')
                    ORDER BY s.appointment_date,s.appointment_time""",
@@ -604,20 +615,6 @@ class MedQueueHandler(BaseHTTPRequestHandler):
         if cursor.rowcount == 0:
             raise ApiError(404, "Клиника не найдена")
         self.send_json(200, {"id": account_id, "status": status})
-
-    def delete_clinic(self, account_id: int) -> None:
-        self.require_account("admin")
-        with connect_db() as connection:
-            clinic = connection.execute("SELECT clinic_name FROM accounts WHERE id=? AND role='clinic'", (account_id,)).fetchone()
-            if clinic is None:
-                raise ApiError(404, "Клиника не найдена")
-            name = clinic["clinic_name"]
-            connection.execute("DELETE FROM reviews WHERE clinic_name=? COLLATE NOCASE", (name,))
-            connection.execute("DELETE FROM appointments WHERE slot_id IN (SELECT id FROM slots WHERE owner_user_id=? OR (owner_user_id IS NULL AND clinic_name=? COLLATE NOCASE))", (account_id, name))
-            connection.execute("DELETE FROM slots WHERE owner_user_id=? OR (owner_user_id IS NULL AND clinic_name=? COLLATE NOCASE)", (account_id, name))
-            connection.execute("DELETE FROM favorites WHERE clinic_name=? COLLATE NOCASE", (name,))
-            connection.execute("DELETE FROM accounts WHERE id=?", (account_id,))
-        self.send_json(200, {"deleted": True})
 
     # Направляем GET-запросы к API или отдаём HTML-файлы сайта.
     def do_GET(self) -> None:
@@ -706,11 +703,8 @@ class MedQueueHandler(BaseHTTPRequestHandler):
         patient_appointment = re.fullmatch(r"/api/patient/appointments/(\d+)", path)
         clinic_appointment = re.fullmatch(r"/api/clinic/appointments/(\d+)", path)
         favorite = re.fullmatch(r"/api/patient/favorites/(.+)", path)
-        admin_clinic = re.fullmatch(r"/api/admin/clinics/(\d+)", path)
         try:
-            if admin_clinic:
-                self.delete_clinic(int(admin_clinic.group(1)))
-            elif match:
+            if match:
                 self.delete_slot(int(match.group(1)))
             elif patient_appointment:
                 self.cancel_patient_appointment(int(patient_appointment.group(1)))
@@ -820,7 +814,7 @@ class MedQueueHandler(BaseHTTPRequestHandler):
         with connect_db() as connection:
             rows = connection.execute(
                 f"""SELECT a.id, a.patient_name, a.phone, a.created_at,a.status,
-                          s.id AS slot_id, s.clinic_name, s.doctor_name, s.service,
+                          s.id AS slot_id, s.clinic_name, s.service,
                           s.appointment_date, s.appointment_time, s.price
                    FROM appointments a JOIN slots s ON s.id = a.slot_id {scope}
                    ORDER BY s.appointment_date, s.appointment_time"""
@@ -836,13 +830,12 @@ class MedQueueHandler(BaseHTTPRequestHandler):
             # Сначала проверяем обязательные поля и не принимаем время в прошлом.
             clinic_name = account["clinic_name"]
             service = str(data.get("service", "")).strip()
-            doctor_name = str(data.get("doctor_name", "")).strip()
             appointment_date = str(data.get("date", "")).strip()
             appointment_time = str(data.get("time", "")).strip()
             price = int(data.get("price", 0))
             parsed_date = date.fromisoformat(appointment_date)
             parsed_time = datetime.strptime(appointment_time, "%H:%M").time()
-            if not clinic_name or not service or not doctor_name or len(doctor_name) > 120 or datetime.combine(parsed_date, parsed_time) <= datetime.now() or price <= 0:
+            if not clinic_name or not service or datetime.combine(parsed_date, parsed_time) <= datetime.now() or price <= 0:
                 raise ValueError
         except (ValueError, TypeError):
             self.send_json(400, {"error": "Проверьте услугу, дату, время и цену"})
@@ -852,9 +845,9 @@ class MedQueueHandler(BaseHTTPRequestHandler):
             with connect_db() as connection:
                 cursor = connection.execute(
                     """INSERT INTO slots
-                       (clinic_name, service, appointment_date, appointment_time, price, owner_user_id, doctor_name)
-                       VALUES (?, ?, ?, ?, ?, ?, ?)""",
-                    (clinic_name, service, appointment_date, appointment_time, price, account["id"], doctor_name),
+                       (clinic_name, service, appointment_date, appointment_time, price, owner_user_id)
+                       VALUES (?, ?, ?, ?, ?, ?)""",
+                    (clinic_name, service, appointment_date, appointment_time, price, account["id"]),
                 )
                 slot_id = cursor.lastrowid
                 row = connection.execute("SELECT * FROM slots WHERE id = ?", (slot_id,)).fetchone()

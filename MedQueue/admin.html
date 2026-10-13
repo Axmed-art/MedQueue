@@ -43,10 +43,6 @@
             <option value="Приём при острой боли">Приём при острой боли</option>
           </select>
         </label>
-        <label class="text-xs font-bold">Врач
-          <input name="doctor_name" list="doctor-options" maxlength="120" required placeholder="Имя и фамилия" class="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm font-normal outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100">
-          <datalist id="doctor-options"></datalist>
-        </label>
         <label class="text-xs font-bold">Цена, ₸
           <input id="price" name="price" type="number" min="500" step="500" placeholder="Укажите цену" required class="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm font-normal outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100">
         </label>
@@ -139,7 +135,7 @@
         details.className = 'min-w-0';
         const title = document.createElement('p');
         title.className = 'text-xs font-bold';
-        title.textContent = `${slot.service} · ${formatDate(slot.date)} в ${slot.time} · ${slot.doctor_name||"Врач не указан"}`;
+        title.textContent = `${slot.service} · ${formatDate(slot.date)} в ${slot.time}`;
         const appointment = bookingBySlot.get(slot.id);
         const meta = document.createElement('p');
         meta.className = 'mt-1 text-[11px] text-slate-500';
@@ -212,7 +208,7 @@
         top.append(identity, badge);
         const detail = document.createElement('p');
         detail.className = 'mt-3 border-t border-slate-100 pt-3 text-xs font-semibold';
-        detail.textContent = `${item.slot.service} · ${formatDate(item.slot.date)} в ${item.slot.time} · ${item.slot.doctor_name||"Врач не указан"}`;
+        detail.textContent = `${item.slot.service} · ${formatDate(item.slot.date)} в ${item.slot.time}`;
         const price = document.createElement('p');
         price.className = 'mt-1 text-[11px] text-slate-500';
         price.textContent = `${item.slot.price.toLocaleString('ru-RU')} ₸ · ${item.slot.clinic_name}`;
@@ -269,8 +265,6 @@
         document.getElementById('stat-booked').textContent = bookedCount;
         appointmentService.replaceChildren(new Option('Все услуги', ''));
         [...new Set(appointments.map((appointment) => appointment.slot.service))].sort().forEach((service) => appointmentService.add(new Option(service, service)));
-        const doctors=[...new Set(slots.map(slot=>slot.doctor_name).filter(Boolean))];
-        document.getElementById('doctor-options').replaceChildren(...doctors.map(name=>new Option(name,name)));
         renderSlots(slots, appointments);
         renderAppointments();
       } catch (error) {
@@ -291,7 +285,7 @@
         await api('/api/slots', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ service: formData.get('service'), doctor_name: formData.get('doctor_name'), date: formData.get('date'), time: formData.get('time'), price: Number(formData.get('price')) }),
+          body: JSON.stringify({ service: formData.get('service'), date: formData.get('date'), time: formData.get('time'), price: Number(formData.get('price')) }),
         });
         showMessage(slotMessage, 'Свободное время добавлено.', false);
         slotForm.reset();
