@@ -42,6 +42,12 @@
       try{await api('/api/admin/clinic-decision',{method:'POST',body:JSON.stringify({clinic_id:clinic.id,status})});await load()}
       catch(error){showError(error);button.disabled=false}
     }
+    async function deleteClinic(clinic,button){
+      if(!confirm(`Удалить клинику «${clinic.clinic_name}»? Вместе с ней будут удалены её расписание, записи и отзывы. Это действие нельзя отменить.`))return;
+      button.disabled=true;
+      try{await api(`/api/admin/clinics/${clinic.id}`,{method:'DELETE'});await load()}
+      catch(error){showError(error);button.disabled=false}
+    }
     function renderClinics(){
       const list=document.getElementById('clinics');list.replaceChildren();
       const filter=document.getElementById('clinic-filter').value;
@@ -63,6 +69,7 @@
           button.className=nextStatus==='approved'?'rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white':'rounded-lg border px-3 py-2 text-sm font-semibold text-slate-700';
           button.textContent=label;button.onclick=()=>setClinicStatus(clinic,nextStatus,button);actions.append(button);
         });
+        const remove=document.createElement('button');remove.type='button';remove.className='rounded-lg border border-rose-200 px-3 py-2 text-sm font-semibold text-rose-700';remove.textContent='Удалить клинику';remove.onclick=()=>deleteClinic(clinic,remove);actions.append(remove);
         if(actions.childElementCount)card.append(actions);
         list.append(card);
       });

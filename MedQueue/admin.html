@@ -27,10 +27,26 @@
 
     <div id="page-error" class="mt-4 hidden rounded-xl border border-rose-200 bg-rose-50 p-4 text-xs leading-5 text-rose-700" role="alert"></div>
 
+    <section class="mt-7" aria-labelledby="doctors-title">
+      <div><p class="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400">Команда</p><h2 id="doctors-title" class="mt-1 text-base font-bold">Врачи клиники</h2><p class="mt-1 text-xs text-slate-500">Добавьте врачей, чтобы назначать их на свободные часы.</p></div>
+      <div id="doctors-list" class="mt-3 space-y-2"></div>
+      <form id="doctor-form" class="mt-3 grid gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-soft sm:grid-cols-2 sm:p-5">
+        <input id="doctor-id" name="doctor_id" type="hidden">
+        <label class="text-xs font-bold">Имя врача<input id="doctor-name" name="name" required minlength="2" maxlength="100" class="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-3 text-sm font-normal" placeholder="Например, Айгерим Садыкова"></label>
+        <label class="text-xs font-bold">Специальность<input id="doctor-specialty" name="specialty" required minlength="2" maxlength="120" class="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-3 text-sm font-normal" placeholder="Стоматолог-терапевт"></label>
+        <label class="text-xs font-bold">Стаж, лет<input id="doctor-experience" name="experience" type="number" min="0" max="60" value="0" required class="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-3 text-sm font-normal"></label>
+        <div class="flex items-end gap-2"><button id="doctor-save" type="submit" class="rounded-xl bg-blue-600 px-4 py-3 text-sm font-bold text-white">Добавить врача</button><button id="doctor-cancel" type="button" class="hidden rounded-xl border px-4 py-3 text-sm font-semibold">Отмена</button></div>
+        <p id="doctor-message" class="hidden text-xs sm:col-span-2" role="status" aria-live="polite"></p>
+      </form>
+    </section>
+
     <!-- Форма расписания создаёт слот; цена подставляется по выбранной услуге. -->
     <section class="mt-7" aria-labelledby="create-slot-title">
       <div><p class="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400">Расписание</p><h2 id="create-slot-title" class="mt-1 text-base font-bold">Добавить свободное время</h2></div>
       <form id="slot-form" class="mt-3 grid gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-soft sm:grid-cols-2 sm:p-5">
+        <label class="text-xs font-bold">Врач
+          <select id="slot-doctor" name="doctor_id" required disabled class="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm font-normal outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"><option value="">Сначала добавьте врача</option></select>
+        </label>
         <label class="text-xs font-bold">Услуга
           <select id="service" name="service" required class="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm font-normal outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100">
             <option value="" selected disabled>Выберите услугу</option>
@@ -84,6 +100,8 @@
     const slotDate = document.getElementById('slot-date');
     const serviceSelect = document.getElementById('service');
     const priceInput = document.getElementById('price');
+    const doctorSelect = document.getElementById('slot-doctor');
+    const doctorForm = document.getElementById('doctor-form');
     const appointmentSearch = document.getElementById('appointment-search');
     const appointmentService = document.getElementById('appointment-service');
     const suggestedPrices = { 'Лечение кариеса': 15000, 'Профессиональная чистка': 12000, 'Приём при острой боли': 8000 };
@@ -94,7 +112,7 @@
     serviceSelect.addEventListener('change', () => { priceInput.value = suggestedPrices[serviceSelect.value] || ''; });
 
     // Кэш записей нужен, чтобы мгновенно применять поиск и фильтр услуги.
-    let allAppointments = [];
+    let allAppointments = [], allDoctors = [];
 
     // Единое отображение дат в расписании и списке пациентов.
     function formatDate(value) {
@@ -113,6 +131,52 @@
     function showMessage(element, message, isError = false) {
       element.textContent = message;
       element.className = `text-xs sm:col-span-2 ${isError ? 'text-rose-600' : 'text-emerald-700'}`;
+    }
+
+    function renderDoctors() {
+      const list = document.getElementById('doctors-list');
+      list.replaceChildren();
+      doctorSelect.replaceChildren(new Option(allDoctors.length ? 'Выберите врача' : 'Сначала добавьте врача', ''));
+      doctorSelect.disabled = !allDoctors.length;
+      allDoctors.forEach((doctor) => {
+        doctorSelect.add(new Option(`${doctor.name} · ${doctor.specialty}`, String(doctor.id)));
+        const card = document.createElement('article'); card.className = 'flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-3';
+        const details = document.createElement('div');
+        const title = document.createElement('p'); title.className = 'text-sm font-semibold'; title.textContent = doctor.name;
+        const meta = document.createElement('p'); meta.className = 'mt-1 text-xs text-slate-500'; meta.textContent = `${doctor.specialty} · стаж ${doctor.experience} лет`;
+        details.append(title, meta);
+        const actions = document.createElement('div'); actions.className = 'flex shrink-0 gap-2';
+        const edit = document.createElement('button'); edit.type = 'button'; edit.className = 'rounded-lg border px-3 py-2 text-xs font-semibold'; edit.textContent = 'Изменить';
+        edit.onclick = () => {
+          doctorForm.elements.doctor_id.value = doctor.id;
+          doctorForm.elements.name.value = doctor.name;
+          doctorForm.elements.specialty.value = doctor.specialty;
+          doctorForm.elements.experience.value = doctor.experience;
+          document.getElementById('doctor-save').textContent = 'Сохранить';
+          document.getElementById('doctor-cancel').classList.remove('hidden');
+          document.getElementById('doctor-name').focus();
+        };
+        const remove = document.createElement('button'); remove.type = 'button'; remove.className = 'rounded-lg border border-rose-200 px-3 py-2 text-xs font-semibold text-rose-700'; remove.textContent = 'Удалить';
+        remove.onclick = async () => {
+          if (!confirm(`Удалить врача ${doctor.name}?`)) return;
+          remove.disabled = true;
+          try { await api(`/api/clinic/doctors/${doctor.id}`, { method: 'DELETE' }); await loadDashboard(); }
+          catch (error) { showMessage(document.getElementById('doctor-message'), error.message, true); }
+          finally { remove.disabled = false; }
+        };
+        actions.append(edit, remove); card.append(details, actions); list.append(card);
+      });
+      if (!allDoctors.length) {
+        const empty = document.createElement('p'); empty.className = 'rounded-xl border border-slate-200 bg-white p-4 text-xs text-slate-500'; empty.textContent = 'Добавьте врача, чтобы создавать расписание.'; list.append(empty);
+      }
+    }
+
+    function resetDoctorForm() {
+      doctorForm.reset(); doctorForm.elements.doctor_id.value = '';
+      doctorForm.elements.experience.value = '0';
+      document.getElementById('doctor-save').textContent = 'Добавить врача';
+      document.getElementById('doctor-cancel').classList.add('hidden');
+      document.getElementById('doctor-message').classList.add('hidden');
     }
 
     // Строим список слотов и связываем занятый слот с данными пациента.
@@ -139,7 +203,7 @@
         const appointment = bookingBySlot.get(slot.id);
         const meta = document.createElement('p');
         meta.className = 'mt-1 text-[11px] text-slate-500';
-        meta.textContent = `${slot.price.toLocaleString('ru-RU')} ₸ · ${appointment ? `Пациент: ${appointment.patient_name}` : 'Свободно'}`;
+        meta.textContent = `${slot.price.toLocaleString('ru-RU')} ₸ · ${slot.doctor_name || 'Врач не указан'} · ${appointment ? `Пациент: ${appointment.patient_name}` : 'Свободно'}`;
         details.append(title, meta);
         card.append(details);
         if (!slot.booked) {
@@ -208,7 +272,7 @@
         top.append(identity, badge);
         const detail = document.createElement('p');
         detail.className = 'mt-3 border-t border-slate-100 pt-3 text-xs font-semibold';
-        detail.textContent = `${item.slot.service} · ${formatDate(item.slot.date)} в ${item.slot.time}`;
+        detail.textContent = `${item.slot.service} · ${formatDate(item.slot.date)} в ${item.slot.time}${item.slot.doctor_name ? ` · врач: ${item.slot.doctor_name}` : ''}`;
         const price = document.createElement('p');
         price.className = 'mt-1 text-[11px] text-slate-500';
         price.textContent = `${item.slot.price.toLocaleString('ru-RU')} ₸ · ${item.slot.clinic_name}`;
@@ -256,7 +320,9 @@
       document.getElementById('page-error').classList.add('hidden');
       document.getElementById('refresh-button').disabled = true;
       try {
-        const [slots, appointments] = await Promise.all([api('/api/slots?all=1'), api('/api/appointments')]);
+        const [slots, appointments, doctors] = await Promise.all([api('/api/slots?all=1'), api('/api/appointments'), api('/api/clinic/doctors')]);
+        allDoctors = doctors;
+        renderDoctors();
         allAppointments = appointments;
         const freeCount = slots.filter((slot) => !slot.booked).length;
         const bookedCount = slots.length - freeCount;
@@ -285,7 +351,7 @@
         await api('/api/slots', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ service: formData.get('service'), date: formData.get('date'), time: formData.get('time'), price: Number(formData.get('price')) }),
+          body: JSON.stringify({ doctor_id: Number(formData.get('doctor_id')), service: formData.get('service'), date: formData.get('date'), time: formData.get('time'), price: Number(formData.get('price')) }),
         });
         showMessage(slotMessage, 'Свободное время добавлено.', false);
         slotForm.reset();
@@ -298,6 +364,18 @@
         addButton.textContent = '＋ Добавить слот';
       }
     });
+
+    doctorForm.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const button = document.getElementById('doctor-save'); button.disabled = true;
+      const formData = new FormData(doctorForm);
+      try {
+        await api('/api/clinic/doctors', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(Object.fromEntries(formData)) });
+        resetDoctorForm(); showMessage(document.getElementById('doctor-message'), 'Данные врача сохранены.'); await loadDashboard();
+      } catch (error) { showMessage(document.getElementById('doctor-message'), error.message, true); }
+      finally { button.disabled = false; }
+    });
+    document.getElementById('doctor-cancel').addEventListener('click', resetDoctorForm);
 
     // Подключаем обновление, живой поиск, фильтр услуги и сброс фильтров.
     document.getElementById('refresh-button').addEventListener('click', loadDashboard);

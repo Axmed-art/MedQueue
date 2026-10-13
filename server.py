@@ -63,9 +63,8 @@ def connect_db() -> Iterator[sqlite3.Connection]:
         connection.close()
 
 
-# Создаём таблицы при запуске; демо-слоты добавляются только в новую базу.
+# Создаём таблицы при запуске и добавляем поля для существующей базы.
 def initialize_database() -> None:
-    is_new_database = not DATABASE.exists()
     with connect_db() as connection:
         connection.executescript(
             """
@@ -105,6 +104,16 @@ def initialize_database() -> None:
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             );
 
+            CREATE TABLE IF NOT EXISTS doctors (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                clinic_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+                name TEXT NOT NULL,
+                specialty TEXT NOT NULL,
+                experience INTEGER NOT NULL DEFAULT 0 CHECK (experience BETWEEN 0 AND 60),
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE (clinic_id, name)
+            );
+
             CREATE TABLE IF NOT EXISTS sessions (
                 token_hash TEXT PRIMARY KEY,
                 account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
@@ -123,6 +132,12 @@ def initialize_database() -> None:
         slot_columns = {row["name"] for row in connection.execute("PRAGMA table_info(slots)")}
         if "owner_user_id" not in slot_columns:
             connection.execute("ALTER TABLE slots ADD COLUMN owner_user_id INTEGER REFERENCES accounts(id)")
+        if "doctor_id" not in slot_columns:
+            connection.execute("ALTER TABLE slots ADD COLUMN doctor_id INTEGER REFERENCES doctors(id) ON DELETE SET NULL")
+        if "doctor_name" not in slot_columns:
+            connection.execute("ALTER TABLE slots ADD COLUMN doctor_name TEXT NOT NULL DEFAULT ''")
+        if "doctor_specialty" not in slot_columns:
+            connection.execute("ALTER TABLE slots ADD COLUMN doctor_specialty TEXT NOT NULL DEFAULT ''")
         appointment_columns = {row["name"] for row in connection.execute("PRAGMA table_info(appointments)")}
         if "patient_id" not in appointment_columns:
             connection.execute("ALTER TABLE appointments ADD COLUMN patient_id INTEGER REFERENCES accounts(id)")
@@ -176,25 +191,6 @@ def initialize_database() -> None:
         elif hosted:
             print("ВНИМАНИЕ: задайте SITE_ADMIN_EMAIL и SITE_ADMIN_PASSWORD в Render → Environment, чтобы включить панель владельца.")
 
-        # Тестовое расписание нужно для первого показа; существующую базу не перезаписываем.
-        if is_new_database:
-            tomorrow = date.today() + timedelta(days=1)
-            day_after = date.today() + timedelta(days=2)
-            demo_slots = [
-                ("Smile Clinic", "Лечение кариеса", tomorrow.isoformat(), "10:00", 15000),
-                ("Smile Clinic", "Профессиональная чистка", tomorrow.isoformat(), "12:30", 12000),
-                ("Smile Clinic", "Приём при острой боли", tomorrow.isoformat(), "15:00", 8000),
-                ("Smile Clinic", "Лечение кариеса", day_after.isoformat(), "11:00", 15000),
-                ("Smile Clinic", "Профессиональная чистка", day_after.isoformat(), "14:00", 12000),
-                ("Smile Clinic", "Приём при острой боли", day_after.isoformat(), "17:00", 8000),
-            ]
-            connection.executemany(
-                """INSERT INTO slots
-                   (clinic_name, service, appointment_date, appointment_time, price)
-                   VALUES (?, ?, ?, ?, ?)""",
-                demo_slots,
-            )
-
 
 # Преобразуем строку SQLite в JSON-объект для страниц сайта.
 def slot_record(row: sqlite3.Row, booked: bool = False) -> dict:
@@ -205,6 +201,9 @@ def slot_record(row: sqlite3.Row, booked: bool = False) -> dict:
         "date": row["appointment_date"],
         "time": row["appointment_time"],
         "price": row["price"],
+        "doctor_id": row["doctor_id"] if "doctor_id" in row.keys() else None,
+        "doctor_name": row["doctor_name"] if "doctor_name" in row.keys() else "",
+        "doctor_specialty": row["doctor_specialty"] if "doctor_specialty" in row.keys() else "",
         "booked": booked,
     }
 
@@ -330,11 +329,6 @@ class MedQueueHandler(BaseHTTPRequestHandler):
                      clinic_address or None, "pending" if role == "clinic" else None),
                 )
                 account_id = cursor.lastrowid
-                if role == "clinic" and clinic_name.casefold() == "smile clinic":
-                    connection.execute(
-                        "UPDATE slots SET owner_user_id=? WHERE owner_user_id IS NULL AND clinic_name=? COLLATE NOCASE",
-                        (account_id, clinic_name),
-                    )
                 account = connection.execute("SELECT * FROM accounts WHERE id=?", (account_id,)).fetchone()
         except sqlite3.IntegrityError as error:
             raise ApiError(409, "Аккаунт с такой почтой уже существует") from error
@@ -377,7 +371,9 @@ class MedQueueHandler(BaseHTTPRequestHandler):
             "has_review": bool(row["has_review"]) if "has_review" in row.keys() else False,
             "slot": {"id": row["slot_id"], "clinic_name": row["clinic_name"],
                      "service": row["service"], "date": row["appointment_date"],
-                     "time": row["appointment_time"], "price": row["price"]},
+                     "time": row["appointment_time"], "price": row["price"],
+                     "doctor_name": row["doctor_name"] if "doctor_name" in row.keys() else "",
+                     "doctor_specialty": row["doctor_specialty"] if "doctor_specialty" in row.keys() else ""},
         }
 
     def get_patient_appointments(self, account_id: int) -> None:
@@ -386,7 +382,8 @@ class MedQueueHandler(BaseHTTPRequestHandler):
                 """SELECT a.id,a.patient_name,a.phone,a.created_at,a.status,
                           EXISTS(SELECT 1 FROM reviews r WHERE r.appointment_id=a.id) AS has_review,
                           s.id AS slot_id,s.clinic_name,
-                          s.service,s.appointment_date,s.appointment_time,s.price
+                          s.service,s.appointment_date,s.appointment_time,s.price,
+                          s.doctor_name,s.doctor_specialty
                    FROM appointments a JOIN slots s ON s.id=a.slot_id
                    WHERE a.patient_id=? ORDER BY s.appointment_date,s.appointment_time""",
                 (account_id,),
@@ -562,7 +559,7 @@ class MedQueueHandler(BaseHTTPRequestHandler):
         with connect_db() as connection:
             rows = connection.execute(
                 """SELECT a.id,a.patient_name,a.phone,a.created_at,a.status,s.id AS slot_id,s.clinic_name,
-                   s.service,s.appointment_date,s.appointment_time,s.price
+                   s.service,s.appointment_date,s.appointment_time,s.price,s.doctor_name,s.doctor_specialty
                    FROM appointments a JOIN slots s ON s.id=a.slot_id
                    WHERE s.owner_user_id=? AND a.status IN ('pending','confirmed')
                    ORDER BY s.appointment_date,s.appointment_time""",
@@ -596,6 +593,96 @@ class MedQueueHandler(BaseHTTPRequestHandler):
                 "SELECT id,name,email,phone,clinic_name,clinic_address,clinic_status,created_at FROM accounts WHERE role='clinic' ORDER BY created_at DESC"
             ).fetchall()
         self.send_json(200, [dict(row) for row in rows])
+
+    def delete_admin_clinic(self, clinic_id: int) -> None:
+        self.require_account("admin")
+        with connect_db() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            clinic = connection.execute(
+                "SELECT clinic_name FROM accounts WHERE id=? AND role='clinic'", (clinic_id,)
+            ).fetchone()
+            if clinic is None:
+                raise ApiError(404, "Клиника не найдена")
+            connection.execute(
+                "DELETE FROM appointments WHERE slot_id IN (SELECT id FROM slots WHERE owner_user_id=?)",
+                (clinic_id,),
+            )
+            connection.execute("DELETE FROM slots WHERE owner_user_id=?", (clinic_id,))
+            connection.execute(
+                "DELETE FROM favorites WHERE clinic_name=? COLLATE NOCASE", (clinic["clinic_name"],)
+            )
+            connection.execute("DELETE FROM accounts WHERE id=?", (clinic_id,))
+        self.send_json(200, {"deleted": True, "clinic_id": clinic_id})
+
+    def get_clinic_doctors(self, clinic_id: int) -> None:
+        with connect_db() as connection:
+            rows = connection.execute(
+                "SELECT id,name,specialty,experience FROM doctors WHERE clinic_id=? ORDER BY name COLLATE NOCASE",
+                (clinic_id,),
+            ).fetchall()
+        self.send_json(200, [dict(row) for row in rows])
+
+    def save_clinic_doctor(self) -> None:
+        account = self.require_account("clinic", approved_clinic=True)
+        try:
+            data = self.read_json()
+            doctor_id = int(data.get("doctor_id") or 0)
+            name = str(data.get("name", "")).strip()
+            specialty = str(data.get("specialty", "")).strip()
+            experience = int(data.get("experience", 0))
+            if not 2 <= len(name) <= 100 or not 2 <= len(specialty) <= 120 or not 0 <= experience <= 60:
+                raise ValueError
+        except (ValueError, TypeError):
+            raise ApiError(400, "Заполните имя врача, специальность и корректный стаж")
+
+        try:
+            with connect_db() as connection:
+                if doctor_id:
+                    cursor = connection.execute(
+                        "UPDATE doctors SET name=?,specialty=?,experience=? WHERE id=? AND clinic_id=?",
+                        (name, specialty, experience, doctor_id, account["id"]),
+                    )
+                    if cursor.rowcount == 0:
+                        raise ApiError(404, "Врач не найден в вашей клинике")
+                    connection.execute(
+                        """UPDATE slots SET doctor_name=?,doctor_specialty=? WHERE doctor_id=?
+                           AND NOT EXISTS (SELECT 1 FROM appointments a WHERE a.slot_id=slots.id)""",
+                        (name, specialty, doctor_id),
+                    )
+                else:
+                    cursor = connection.execute(
+                        "INSERT INTO doctors (clinic_id,name,specialty,experience) VALUES (?,?,?,?)",
+                        (account["id"], name, specialty, experience),
+                    )
+                    doctor_id = cursor.lastrowid
+                doctor = connection.execute(
+                    "SELECT id,name,specialty,experience FROM doctors WHERE id=? AND clinic_id=?",
+                    (doctor_id, account["id"]),
+                ).fetchone()
+        except sqlite3.IntegrityError as error:
+            raise ApiError(409, "Врач с таким именем уже добавлен") from error
+        self.send_json(200, dict(doctor))
+
+    def delete_clinic_doctor(self, doctor_id: int) -> None:
+        account = self.require_account("clinic", approved_clinic=True)
+        with connect_db() as connection:
+            doctor = connection.execute(
+                "SELECT name FROM doctors WHERE id=? AND clinic_id=?", (doctor_id, account["id"])
+            ).fetchone()
+            if doctor is None:
+                raise ApiError(404, "Врач не найден в вашей клинике")
+            assigned = connection.execute(
+                """SELECT 1 FROM slots s WHERE s.doctor_id=? AND
+                   (s.appointment_date > date('now') OR
+                    (s.appointment_date=date('now') AND s.appointment_time >= time('now')) OR
+                    EXISTS (SELECT 1 FROM appointments a WHERE a.slot_id=s.id
+                            AND a.status IN ('pending','confirmed'))) LIMIT 1""",
+                (doctor_id,),
+            ).fetchone()
+            if assigned:
+                raise ApiError(409, "Нельзя удалить врача, пока к нему привязаны слоты расписания")
+            connection.execute("DELETE FROM doctors WHERE id=? AND clinic_id=?", (doctor_id, account["id"]))
+        self.send_json(200, {"deleted": True, "doctor_id": doctor_id})
 
     def decide_clinic(self) -> None:
         self.require_account("admin")
@@ -648,6 +735,9 @@ class MedQueueHandler(BaseHTTPRequestHandler):
             elif path == "/api/clinic/profile":
                 account = self.require_account("clinic")
                 self.send_json(200, self.account_record(account))
+            elif path == "/api/clinic/doctors":
+                account = self.require_account("clinic", approved_clinic=True)
+                self.get_clinic_doctors(account["id"])
             elif path == "/api/clinic/slots":
                 account = self.require_account("clinic", approved_clinic=True)
                 self.get_clinic_slots(account["id"])
@@ -691,6 +781,8 @@ class MedQueueHandler(BaseHTTPRequestHandler):
                 self.save_patient_favorite(account["id"])
             elif path == "/api/admin/clinic-decision":
                 self.decide_clinic()
+            elif path == "/api/clinic/doctors":
+                self.save_clinic_doctor()
             else:
                 self.send_json(404, {"error": "Маршрут не найден"})
         except ApiError as error:
@@ -703,8 +795,14 @@ class MedQueueHandler(BaseHTTPRequestHandler):
         patient_appointment = re.fullmatch(r"/api/patient/appointments/(\d+)", path)
         clinic_appointment = re.fullmatch(r"/api/clinic/appointments/(\d+)", path)
         favorite = re.fullmatch(r"/api/patient/favorites/(.+)", path)
+        admin_clinic = re.fullmatch(r"/api/admin/clinics/(\d+)", path)
+        clinic_doctor = re.fullmatch(r"/api/clinic/doctors/(\d+)", path)
         try:
-            if match:
+            if admin_clinic:
+                self.delete_admin_clinic(int(admin_clinic.group(1)))
+            elif clinic_doctor:
+                self.delete_clinic_doctor(int(clinic_doctor.group(1)))
+            elif match:
                 self.delete_slot(int(match.group(1)))
             elif patient_appointment:
                 self.cancel_patient_appointment(int(patient_appointment.group(1)))
@@ -739,10 +837,11 @@ class MedQueueHandler(BaseHTTPRequestHandler):
         params: list = []
         if not include_booked:
             sql += """ WHERE NOT EXISTS (SELECT 1 FROM appointments a WHERE a.slot_id = s.id AND a.status IN ('pending','confirmed'))
-                       AND (s.owner_user_id IS NULL OR EXISTS (
+                       AND s.owner_user_id IS NOT NULL
+                       AND EXISTS (
                            SELECT 1 FROM accounts c WHERE c.id=s.owner_user_id
                            AND c.role='clinic' AND c.clinic_status='approved'
-                       ))"""
+                       )"""
             if clinic_name:
                 sql += " AND s.clinic_name=? COLLATE NOCASE"
                 params.append(clinic_name)
@@ -757,27 +856,11 @@ class MedQueueHandler(BaseHTTPRequestHandler):
     def get_clinics(self) -> None:
         with connect_db() as connection:
             rows = connection.execute(
-                """SELECT clinic_name AS name, MIN(owner_user_id) AS owner_user_id FROM slots
-                   WHERE owner_user_id IS NULL OR owner_user_id IN (
-                       SELECT id FROM accounts WHERE role='clinic' AND clinic_status='approved'
-                   ) GROUP BY clinic_name
-                   UNION
-                   SELECT clinic_name AS name, id AS owner_user_id FROM accounts
-                   WHERE role='clinic' AND clinic_status='approved'
-                   ORDER BY name COLLATE NOCASE"""
+                """SELECT id,clinic_name AS name,clinic_address AS address,phone
+                   FROM accounts WHERE role='clinic' AND clinic_status='approved'
+                   ORDER BY clinic_name COLLATE NOCASE"""
             ).fetchall()
-            clinics = []
-            for row in rows:
-                owner = row["owner_user_id"]
-                account = connection.execute(
-                    "SELECT clinic_address,phone FROM accounts WHERE id=?", (owner,)
-                ).fetchone() if owner else None
-                clinics.append({
-                    "id": str(owner or ""), "name": row["name"],
-                    "address": account["clinic_address"] if account else "",
-                    "phone": account["phone"] if account else "",
-                })
-        self.send_json(200, clinics)
+        self.send_json(200, [dict(row) for row in rows])
 
     # По ID загружаем детали слота перед показом формы подтверждения.
     def get_slot(self, slot_id: int) -> None:
@@ -792,15 +875,17 @@ class MedQueueHandler(BaseHTTPRequestHandler):
         if row is None:
             self.send_json(404, {"error": "Время приёма не найдено"})
             return
-        if row["owner_user_id"] is not None:
-            with connect_db() as connection:
-                clinic = connection.execute(
-                    "SELECT clinic_status FROM accounts WHERE id=? AND role='clinic'",
-                    (row["owner_user_id"],),
-                ).fetchone()
-            if clinic is None or clinic["clinic_status"] != "approved":
-                self.send_json(404, {"error": "Клиника не принимает запись"})
-                return
+        if row["owner_user_id"] is None:
+            self.send_json(404, {"error": "Клиника не принимает запись"})
+            return
+        with connect_db() as connection:
+            clinic = connection.execute(
+                "SELECT clinic_status FROM accounts WHERE id=? AND role='clinic'",
+                (row["owner_user_id"],),
+            ).fetchone()
+        if clinic is None or clinic["clinic_status"] != "approved":
+            self.send_json(404, {"error": "Клиника не принимает запись"})
+            return
         self.send_json(200, slot_record(row, bool(row["booked"])))
 
     # Админка получает список пациентов вместе с выбранной услугой и временем.
@@ -815,7 +900,8 @@ class MedQueueHandler(BaseHTTPRequestHandler):
             rows = connection.execute(
                 f"""SELECT a.id, a.patient_name, a.phone, a.created_at,a.status,
                           s.id AS slot_id, s.clinic_name, s.service,
-                          s.appointment_date, s.appointment_time, s.price
+                          s.appointment_date, s.appointment_time, s.price,
+                          s.doctor_name,s.doctor_specialty
                    FROM appointments a JOIN slots s ON s.id = a.slot_id {scope}
                    ORDER BY s.appointment_date, s.appointment_time"""
                 , (account["id"],) if account["role"] == "clinic" else ()
@@ -829,25 +915,34 @@ class MedQueueHandler(BaseHTTPRequestHandler):
             data = self.read_json()
             # Сначала проверяем обязательные поля и не принимаем время в прошлом.
             clinic_name = account["clinic_name"]
+            doctor_id = int(data.get("doctor_id", 0))
             service = str(data.get("service", "")).strip()
             appointment_date = str(data.get("date", "")).strip()
             appointment_time = str(data.get("time", "")).strip()
             price = int(data.get("price", 0))
             parsed_date = date.fromisoformat(appointment_date)
             parsed_time = datetime.strptime(appointment_time, "%H:%M").time()
-            if not clinic_name or not service or datetime.combine(parsed_date, parsed_time) <= datetime.now() or price <= 0:
+            if not clinic_name or doctor_id <= 0 or not service or datetime.combine(parsed_date, parsed_time) <= datetime.now() or price <= 0:
                 raise ValueError
         except (ValueError, TypeError):
-            self.send_json(400, {"error": "Проверьте услугу, дату, время и цену"})
+            self.send_json(400, {"error": "Выберите врача, услугу, дату, время и укажите корректную цену"})
             return
 
         try:
             with connect_db() as connection:
+                doctor = connection.execute(
+                    "SELECT name,specialty FROM doctors WHERE id=? AND clinic_id=?",
+                    (doctor_id, account["id"]),
+                ).fetchone()
+                if doctor is None:
+                    raise ApiError(400, "Выберите врача из списка вашей клиники")
                 cursor = connection.execute(
                     """INSERT INTO slots
-                       (clinic_name, service, appointment_date, appointment_time, price, owner_user_id)
-                       VALUES (?, ?, ?, ?, ?, ?)""",
-                    (clinic_name, service, appointment_date, appointment_time, price, account["id"]),
+                       (clinic_name, service, appointment_date, appointment_time, price, owner_user_id, doctor_id,
+                        doctor_name, doctor_specialty)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (clinic_name, service, appointment_date, appointment_time, price, account["id"], doctor_id,
+                     doctor["name"], doctor["specialty"]),
                 )
                 slot_id = cursor.lastrowid
                 row = connection.execute("SELECT * FROM slots WHERE id = ?", (slot_id,)).fetchone()

@@ -64,7 +64,7 @@
         items.forEach(item=>{
           const card=document.createElement('article');card.className='rounded-xl border border-slate-200 p-4';
           const title=document.createElement('p');title.className='font-semibold';title.textContent=item.slot.clinic_name;
-          const detail=document.createElement('p');detail.className='mt-1 text-sm text-slate-600';detail.textContent=`${item.slot.service} · ${item.slot.date} · ${item.slot.time}`;
+          const detail=document.createElement('p');detail.className='mt-1 text-sm text-slate-600';detail.textContent=`${item.slot.service} · ${item.slot.date} · ${item.slot.time}${item.slot.doctor_name?` · врач: ${item.slot.doctor_name}`:''}`;
           const price=document.createElement('p');price.className='mt-1 text-xs text-slate-500';price.textContent=`${item.slot.price.toLocaleString('ru-RU')} ₸`;
           const statusNames={pending:'Ожидает подтверждения',confirmed:'Подтверждена',cancelled:'Отменена',completed:'Завершена'};
           const status=document.createElement('p');status.className=`mt-2 text-xs font-semibold ${item.status==='cancelled'?'text-rose-600':'text-blue-700'}`;status.textContent=`Статус: ${statusNames[item.status]||'Подтверждена'}`;
