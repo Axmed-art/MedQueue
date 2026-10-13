@@ -63,7 +63,8 @@
           button.className=nextStatus==='approved'?'rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white':'rounded-lg border px-3 py-2 text-sm font-semibold text-slate-700';
           button.textContent=label;button.onclick=()=>setClinicStatus(clinic,nextStatus,button);actions.append(button);
         });
-        if(actions.childElementCount)card.append(actions);
+        const remove=document.createElement('button');remove.type='button';remove.className='rounded-lg border border-rose-200 px-3 py-2 text-sm font-semibold text-rose-700';remove.textContent='Удалить клинику';remove.addEventListener('click',async()=>{if(!confirm(`Удалить клинику «${clinic.clinic_name}» вместе с расписанием, записями и отзывами?`))return;remove.disabled=true;try{await api(`/api/admin/clinics/${clinic.id}`,{method:'DELETE'});await load()}catch(error){showError(error);remove.disabled=false}});actions.append(remove);
+        card.append(actions);
         list.append(card);
       });
     }
