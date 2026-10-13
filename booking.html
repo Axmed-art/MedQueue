@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+
+  <meta charset="UTF-8">
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+  >
+
+  <title>Подтверждение записи — MedQueue</title>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <script>
+
+    tailwind.config = {
+
+      theme: {
+
+        extend: {
+
+          colors: {
+
+            brand: '#00738C',
+            brandLight: '#D6EAD4',
+            brandSoft: '#81B0B2',
+            brandDark: '#173A3F',
+            accent: '#91A675'
+
+          },
+
+          boxShadow: {
+
+            soft:
+              '0 10px 30px rgba(23, 58, 63, 0.08)'
+
+          }
+
+        }
+
+      }
+
+    }
+
+  </script>
+
+  <style>
+    :root {
+      --mq-forest: #123F32;
+      --mq-green: #176B52;
+      --mq-green-light: #2E8065;
+      --mq-mint: #DCEFE6;
+      --mq-soft: #EEF7F2;
+      --mq-line: #DCE8E1;
+      --mq-shadow: 0 18px 45px rgba(18, 63, 50, .09);
+    }
+
+    body {
+      background:
+        radial-gradient(circle at 10% 0%, rgba(181, 207, 159, .28), transparent 30%),
+        radial-gradient(circle at 95% 20%, rgba(220, 239, 230, .7), transparent 28%),
+        #F5F7F2;
+      color: #173A3F;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    body > main { box-shadow: 0 0 55px rgba(18, 63, 50, .07); }
+    body > main > header > a {
+      display: grid;
+      width: 40px;
+      height: 40px;
+      place-items: center;
+      border: 1px solid var(--mq-line);
+      border-radius: 50%;
+      background: rgba(255, 255, 255, .82);
+      color: var(--mq-green);
+      transition: background-color .2s, transform .2s;
+    }
+    body > main > header > a:hover { background: white; transform: translateX(-2px); }
+    body > main > header p { color: var(--mq-green-light); letter-spacing: .08em; text-transform: uppercase; }
+    #booking-form > div:first-child {
+      border-color: var(--mq-line);
+      border-radius: 22px;
+      padding: 19px;
+      box-shadow: var(--mq-shadow);
+    }
+    #booking-form > div:first-child > div:first-child { border-color: var(--mq-line); }
+    #booking-form > div:first-child > div:first-child > span { color: var(--mq-green); font-size: 15px; }
+    #appointment-form { margin-top: 22px; display: grid; gap: 16px; }
+    #appointment-form label { margin-bottom: 7px; color: #173A3F; font-size: 13px; }
+    #appointment-form input {
+      min-height: 48px;
+      border-color: var(--mq-line);
+      border-radius: 13px;
+      padding: 13px 15px;
+      color: #173A3F;
+      font-size: 14px;
+      transition: border-color .2s, box-shadow .2s;
+    }
+    #appointment-form input:focus {
+      border-color: var(--mq-green);
+      box-shadow: 0 0 0 4px rgba(46, 128, 101, .11);
+    }
+    #appointment-form button, #success-state a {
+      min-height: 48px;
+      border-radius: 13px;
+      background: var(--mq-forest);
+      box-shadow: 0 10px 22px rgba(18, 63, 50, .16);
+      transition: background-color .2s, transform .2s;
+    }
+    #appointment-form button:hover, #success-state a:hover { background: #0D3228; transform: translateY(-1px); }
+    #appointment-form > p { line-height: 1.6; }
+    #success-state > div:first-child { background: var(--mq-mint); color: var(--mq-green); }
+    [class*="bg-[#00738C]"] { background-color: var(--mq-forest) !important; }
+    [class*="text-[#00738C]"] { color: var(--mq-green-light) !important; }
+    [class*="border-[#E1E9E4]"] { border-color: var(--mq-line) !important; }
+  </style>
+
+</head>
+
+
+<body
+  class="min-h-screen bg-[#F5F7F2] text-[#173A3F] antialiased"
+>
+
+  <main
+    class="mx-auto min-h-screen max-w-md bg-[#F5F7F2] px-4 pb-8"
+  >
+
+    <!-- HEADER -->
+
+    <header
+      class="flex items-center gap-3 pt-6"
+    >
+
+      <a
+        href="clinic.html"
+        class="text-lg text-[#66817C]"
+        aria-label="Назад"
+      >
+        ‹
+      </a>
+
+      <div>
+
+        <p
+          class="text-[11px] font-semibold text-[#91A675]"
+        >
+          КЛИНИКА
+        </p>
+
+        <h1
+          class="mt-0.5 text-base font-bold"
+        >
+          Подтверждение
+        </h1>
+
+      </div>
+
+    </header>
+
+
+    <!-- BOOKING FORM -->
+
+    <section
+      id="booking-form"
+      class="mt-5"
+    >
+
+      <div
+        class="rounded-xl border border-[#E1E9E4] bg-white p-4 shadow-soft"
+      >
+
+        <div
+          class="flex items-center justify-between border-b border-[#E7EEEA] pb-3"
+        >
+
+          <div>
+
+            <h2 class="text-sm font-bold">
+              Smile Clinic
+            </h2>
+
+            <p
+              class="mt-1 text-[11px] text-[#6F8580]"
+            >
+              Сегодня в 18:00
+            </p>
+
+          </div>
+
+          <span
+            class="text-xs font-bold text-[#00738C]"
+          >
+            15 000 ₸
+          </span>
+
+        </div>
+
+
+        <dl
+          class="mt-3 space-y-2 text-xs"
+        >
+
+          <div
+            class="flex justify-between gap-4"
+          >
+
+            <dt class="text-[#6F8580]">
+              Врач
+            </dt>
+
+            <dd
+              class="text-right font-semibold"
+            >
+              Анна Петрова
+            </dd>
+
+          </div>
+
+
+          <div
+            class="flex justify-between gap-4"
+          >
+
+            <dt class="text-[#6F8580]">
+              Услуга
+            </dt>
+
+            <dd
+              class="text-right font-semibold"
+            >
+              Лечение кариеса
+            </dd>
+
+          </div>
+
+        </dl>
+
+      </div>
+
+
+      <!-- FORM -->
+
+      <form
+        id="appointment-form"
+        class="mt-5 space-y-3"
+      >
+
+        <div>
+
+          <label
+            for="name"
+            class="mb-1.5 block text-xs font-semibold"
+          >
+            Ваше имя
+          </label>
+
+          <input
+            id="name"
+            name="name"
+            type="text"
+            placeholder="Например, Алия"
+            required
+            class="w-full rounded-lg border border-[#D6E2DC] bg-white px-3 py-3 text-xs outline-none placeholder:text-[#91A09C] focus:border-[#00738C] focus:ring-2 focus:ring-[#D6EAD4]"
+          >
+
+        </div>
+
+
+        <div>
+
+          <label
+            for="phone"
+            class="mb-1.5 block text-xs font-semibold"
+          >
+            Номер телефона
+          </label>
+
+          <input
+            id="phone"
+            name="phone"
+            type="tel"
+            placeholder="+7 (___) ___-__-__"
+            required
+            class="w-full rounded-lg border border-[#D6E2DC] bg-white px-3 py-3 text-xs outline-none placeholder:text-[#91A09C] focus:border-[#00738C] focus:ring-2 focus:ring-[#D6EAD4]"
+          >
+
+        </div>
+
+
+        <button
+          type="submit"
+          class="mt-2 flex w-full items-center justify-center rounded-lg bg-[#00738C] px-4 py-3 text-xs font-bold text-white shadow-md shadow-[#81B0B2]/30 hover:bg-[#006477]"
+        >
+          Подтвердить запись
+        </button>
+
+
+        <p
+          class="text-center text-[10px] leading-4 text-[#91A09C]"
+        >
+          Нажимая на кнопку, вы соглашаетесь
+          с обработкой персональных данных
+        </p>
+
+      </form>
+
+    </section>
+
+
+    <!-- SUCCESS -->
+
+    <section
+      id="success-state"
+      class="hidden pt-24 text-center"
+      aria-live="polite"
+    >
+
+      <div
+        class="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-[#D6EAD4] text-4xl text-[#5F9B70]"
+      >
+        ✓
+      </div>
+
+
+      <h2
+        class="mt-6 text-2xl font-bold"
+      >
+        Вы успешно записаны!
+      </h2>
+
+
+      <p
+        class="mx-auto mt-3 max-w-xs text-sm leading-6 text-[#6F8580]"
+      >
+        Ждём вас сегодня в 18:30
+        в Smile Clinic.
+        Подтверждение отправлено
+        на ваш номер.
+      </p>
+
+
+      <a
+        href="index.html"
+        class="mt-8 inline-flex w-full items-center justify-center rounded-xl bg-[#00738C] px-4 py-3.5 text-sm font-bold text-white shadow-lg shadow-[#81B0B2]/30 hover:bg-[#006477]"
+      >
+        На главную
+      </a>
+
+    </section>
+
+  </main>
+
+
+  <script>
+
+    document
+      .getElementById('appointment-form')
+      .addEventListener('submit', function (event) {
+
+        event.preventDefault();
+
+        document
+          .getElementById('booking-form')
+          .classList
+          .add('hidden');
+
+        document
+          .getElementById('success-state')
+          .classList
+          .remove('hidden');
+
+        window.scrollTo({
+          top: 0,
+          behavior: 'smooth'
+        });
+
+      });
+
+  </script>
+
+</body>
+
+</html>

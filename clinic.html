@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+
+  <meta charset="UTF-8">
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+  >
+
+  <title>Smile Clinic — MedQueue</title>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <script>
+
+    tailwind.config = {
+
+      theme: {
+
+        extend: {
+
+          colors: {
+
+            brand: '#00738C',
+            brandLight: '#D6EAD4',
+            brandSoft: '#81B0B2',
+            brandDark: '#173A3F',
+            accent: '#91A675'
+
+          },
+
+          boxShadow: {
+
+            soft:
+              '0 10px 30px rgba(23, 58, 63, 0.08)'
+
+          }
+
+        }
+
+      }
+
+    }
+
+  </script>
+
+  <style>
+    :root {
+      --mq-forest: #123F32;
+      --mq-green: #176B52;
+      --mq-green-light: #2E8065;
+      --mq-mint: #DCEFE6;
+      --mq-soft: #EEF7F2;
+      --mq-line: #DCE8E1;
+      --mq-shadow: 0 18px 45px rgba(18, 63, 50, .09);
+    }
+
+    body {
+      background:
+        radial-gradient(circle at 10% 0%, rgba(181, 207, 159, .28), transparent 30%),
+        radial-gradient(circle at 95% 20%, rgba(220, 239, 230, .7), transparent 28%),
+        #F5F7F2;
+      color: #173A3F;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    body > main { box-shadow: 0 0 55px rgba(18, 63, 50, .07); }
+    body > main > header { gap: 14px; }
+    body > main > header > a {
+      display: grid;
+      width: 40px;
+      height: 40px;
+      place-items: center;
+      border: 1px solid var(--mq-line);
+      border-radius: 50%;
+      background: rgba(255, 255, 255, .82);
+      color: var(--mq-green);
+      transition: background-color .2s, transform .2s;
+    }
+    body > main > header > a:hover { background: white; transform: translateX(-2px); }
+    body > main > header p { color: var(--mq-green-light); letter-spacing: .08em; text-transform: uppercase; }
+    body > main > section:first-of-type {
+      border-color: var(--mq-line);
+      border-radius: 22px;
+      box-shadow: var(--mq-shadow);
+    }
+    body > main > section:first-of-type img { height: 190px; filter: saturate(.86); }
+    body > main > section:first-of-type > div { padding: 19px; }
+    body > main > section:first-of-type > div > div > span {
+      border-radius: 999px;
+      background: var(--mq-soft);
+      color: var(--mq-forest);
+      padding: 8px 11px;
+    }
+    body > main > section[aria-labelledby="doctor-title"] > div {
+      border-color: var(--mq-line);
+      border-radius: 17px;
+      padding: 15px;
+      box-shadow: 0 8px 25px rgba(18, 63, 50, .05);
+    }
+    body > main > section[aria-labelledby="doctor-title"] > div > div:first-child {
+      background: var(--mq-soft);
+    }
+    body > main > section[aria-labelledby="slots-title"] > div:last-child { gap: 10px; }
+    body > main > section[aria-labelledby="slots-title"] label span {
+      min-height: 46px;
+      display: grid;
+      place-items: center;
+      border-color: var(--mq-line);
+      border-radius: 13px;
+      transition: background-color .2s, color .2s, border-color .2s, transform .2s;
+    }
+    body > main > section[aria-labelledby="slots-title"] label:hover span { transform: translateY(-1px); }
+    body > main > section[aria-labelledby="slots-title"] input:checked + span {
+      border-color: var(--mq-forest);
+      background: var(--mq-forest);
+      box-shadow: 0 8px 18px rgba(18, 63, 50, .16);
+    }
+    body > main > div:last-child {
+      border-color: var(--mq-line);
+      border-radius: 18px;
+      padding: 15px;
+      box-shadow: var(--mq-shadow);
+    }
+    [class*="bg-[#00738C]"] { background-color: var(--mq-forest) !important; }
+    [class*="text-[#00738C]"] { color: var(--mq-green-light) !important; }
+    [class*="border-[#E1E9E4]"] { border-color: var(--mq-line) !important; }
+    body > main > div:last-child a {
+      border-radius: 13px;
+      padding: 12px 14px;
+      box-shadow: 0 10px 22px rgba(18, 63, 50, .16);
+      transition: background-color .2s, transform .2s;
+    }
+    body > main > div:last-child a:hover { background: #0D3228; transform: translateY(-1px); }
+  </style>
+
+</head>
+
+
+<body
+  class="min-h-screen bg-[#F5F7F2] text-[#173A3F] antialiased"
+>
+
+  <main
+    class="mx-auto min-h-screen max-w-md bg-[#F5F7F2] px-4 pb-8"
+  >
+
+    <!-- HEADER -->
+
+    <header class="flex items-center gap-3 pt-6">
+
+      <a
+        href="index.html"
+        class="text-lg text-[#66817C]"
+        aria-label="Назад"
+      >
+        ‹
+      </a>
+
+      <div>
+
+        <p
+          class="text-[11px] font-semibold text-[#91A675]"
+        >
+          РЕЗУЛЬТАТЫ
+        </p>
+
+        <h1
+          class="mt-0.5 text-base font-bold"
+        >
+          Smile Clinic
+        </h1>
+
+      </div>
+
+    </header>
+
+
+    <!-- CLINIC -->
+
+    <section
+      class="mt-5 overflow-hidden rounded-xl border border-[#E1E9E4] bg-white shadow-soft"
+    >
+
+      <img
+        src="https://images.unsplash.com/photo-1606811971618-4486d14f3f99?auto=format&fit=crop&w=900&q=80"
+        alt="Интерьер Smile Clinic"
+        class="h-36 w-full object-cover"
+      >
+
+      <div class="p-4">
+
+        <div class="flex items-center justify-between">
+
+          <div>
+
+            <p class="text-sm font-bold">
+              Smile Clinic
+            </p>
+
+            <p
+              class="mt-1 text-[11px] text-[#6F8580]"
+            >
+              ул. Достык, 40, Алматы · 2.5 км
+            </p>
+
+            <p
+              class="mt-2 text-[11px] font-semibold text-[#788F5D]"
+            >
+              ★ 4.9
+
+              <span
+                class="font-normal text-[#91A09C]"
+              >
+                (126 отзывов)
+              </span>
+
+            </p>
+
+          </div>
+
+          <span
+            class="rounded-lg bg-[#D6EAD4] px-2 py-1 text-[11px] font-semibold text-[#00738C]"
+          >
+            Открыто
+          </span>
+
+        </div>
+
+      </div>
+
+    </section>
+
+
+    <!-- ABOUT -->
+
+    <section
+      class="mt-6"
+      aria-labelledby="doctor-title"
+    >
+
+      <h2
+        id="doctor-title"
+        class="text-base font-bold"
+      >
+        О клинике
+      </h2>
+
+      <div
+        class="mt-3 flex items-center gap-3 rounded-xl border border-[#E1E9E4] bg-white p-3"
+      >
+
+        <div
+          class="flex h-10 w-10 items-center justify-center rounded-full bg-[#D6EAD4] text-lg"
+        >
+          👩🏻‍⚕️
+        </div>
+
+        <div>
+
+          <h3 class="text-sm font-bold">
+            Анна Петрова
+          </h3>
+
+          <p
+            class="mt-1 text-[11px] text-[#6F8580]"
+          >
+            Стоматолог-терапевт · стаж 8 лет
+          </p>
+
+        </div>
+
+      </div>
+
+    </section>
+
+
+    <!-- SLOTS -->
+
+    <section
+      class="mt-6"
+      aria-labelledby="slots-title"
+    >
+
+      <div
+        class="flex items-center justify-between"
+      >
+
+        <h2
+          id="slots-title"
+          class="text-base font-bold"
+        >
+          Свободное время
+        </h2>
+
+        <span
+          class="text-[11px] font-semibold text-[#00738C]"
+        >
+          Сегодня
+        </span>
+
+      </div>
+
+
+      <div
+        class="mt-3 grid grid-cols-3 gap-2"
+      >
+
+        <label class="cursor-pointer">
+
+          <input
+            type="radio"
+            name="appointment-time"
+            value="18:00"
+            class="peer sr-only"
+            checked
+          >
+
+          <span
+            class="block rounded-lg border border-[#D6E2DC] bg-white py-2.5 text-center text-xs font-semibold text-[#526D69] transition peer-checked:border-[#00738C] peer-checked:bg-[#00738C] peer-checked:text-white"
+          >
+            18:00
+          </span>
+
+        </label>
+
+
+        <label class="cursor-pointer">
+
+          <input
+            type="radio"
+            name="appointment-time"
+            value="19:15"
+            class="peer sr-only"
+          >
+
+          <span
+            class="block rounded-lg border border-[#D6E2DC] bg-white py-2.5 text-center text-xs font-semibold text-[#526D69] transition peer-checked:border-[#00738C] peer-checked:bg-[#00738C] peer-checked:text-white"
+          >
+            19:15
+          </span>
+
+        </label>
+
+
+        <label class="cursor-pointer">
+
+          <input
+            type="radio"
+            name="appointment-time"
+            value="20:00"
+            class="peer sr-only"
+          >
+
+          <span
+            class="block rounded-lg border border-[#D6E2DC] bg-white py-2.5 text-center text-xs font-semibold text-[#526D69] transition peer-checked:border-[#00738C] peer-checked:bg-[#00738C] peer-checked:text-white"
+          >
+            20:00
+          </span>
+
+        </label>
+
+      </div>
+
+    </section>
+
+
+    <!-- BOOKING -->
+
+    <div
+      class="mt-6 rounded-xl border border-[#E1E9E4] bg-white p-3 shadow-soft"
+    >
+
+      <div
+        class="flex items-center justify-between"
+      >
+
+        <div>
+
+          <p
+            class="text-[11px] text-[#91A09C]"
+          >
+            Выбрано время
+          </p>
+
+          <p class="mt-1 text-sm font-bold">
+            Сегодня, 18:00
+          </p>
+
+        </div>
+
+        <a
+          href="booking.html"
+          class="rounded-lg bg-[#00738C] px-3 py-2 text-xs font-bold text-white shadow-md shadow-[#81B0B2]/30 hover:bg-[#006477]"
+        >
+          Записаться · 15 000 ₸
+        </a>
+
+      </div>
+
+    </div>
+
+  </main>
+
+</body>
+
+</html>

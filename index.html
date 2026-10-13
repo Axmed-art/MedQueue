@@ -1,0 +1,762 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MedQueue — стоматологии Алматы</title>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    :root {
+      --green-dark: #123F32;
+      --green: #176B52;
+      --green-light: #D6EAD4;
+      --green-soft: #EEF7F2;
+      --cream: #F6F8F3;
+      --text: #16382F;
+      --muted: #71847D;
+      --border: #DCE8E1;
+    }
+
+    body {
+      background:
+        radial-gradient(circle at top left, #E8F4ED 0%, transparent 35%),
+        var(--cream);
+      color: var(--text);
+    }
+
+    .medqueue-main {
+      min-height: 100vh;
+      max-width: 480px;
+      margin: 0 auto;
+      padding: 24px 18px 40px;
+    }
+
+    .medqueue-logo-icon {
+      width: 42px;
+      height: 42px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 12px;
+      background: var(--green);
+      color: white;
+      font-size: 20px;
+      box-shadow: 0 6px 18px rgba(23, 107, 82, 0.18);
+    }
+
+    .medqueue-logo-text {
+      font-size: 21px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      color: var(--green-dark);
+    }
+
+    .medqueue-logo-text span {
+      color: var(--green);
+    }
+
+    .medqueue-search {
+      margin-top: 22px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 13px 15px;
+      background: white;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      box-shadow: 0 5px 18px rgba(18, 63, 50, 0.05);
+    }
+
+    .medqueue-search input {
+      width: 100%;
+      border: none;
+      outline: none;
+      background: transparent;
+      color: var(--text);
+      font-size: 13px;
+    }
+
+    .medqueue-search input::placeholder {
+      color: #91A19B;
+    }
+
+    .medqueue-heading {
+      font-size: 17px;
+      font-weight: 800;
+      color: var(--green-dark);
+    }
+
+    .medqueue-quick {
+      margin-top: 12px;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 6px;
+      padding: 6px;
+      background: white;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+    }
+
+    .medqueue-quick button {
+      border-radius: 8px;
+      padding: 9px 5px;
+      font-size: 11px;
+      font-weight: 700;
+      color: #527067;
+      background: transparent;
+      border: none;
+      cursor: pointer;
+    }
+
+    .medqueue-quick button:first-child {
+      background: var(--green);
+      color: white;
+    }
+
+    .medqueue-clinic {
+      overflow: hidden;
+      background: white;
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      box-shadow: 0 8px 24px rgba(18, 63, 50, 0.06);
+    }
+
+    .medqueue-clinic-cover {
+      height: 125px;
+      padding: 14px;
+      background:
+        linear-gradient(120deg, #DCEFE6, #EEF7F2 55%, #D8E9DF);
+    }
+
+    .medqueue-open {
+      display: inline-block;
+      padding: 6px 10px;
+      border-radius: 20px;
+      background: white;
+      color: var(--green);
+      font-size: 10px;
+      font-weight: 800;
+      box-shadow: 0 3px 10px rgba(18, 63, 50, 0.06);
+    }
+
+    .medqueue-clinic-body {
+      padding: 16px;
+    }
+
+    .medqueue-clinic h3 {
+      color: var(--green-dark);
+      font-size: 16px;
+      font-weight: 800;
+    }
+
+    .medqueue-clinic p {
+      color: var(--muted);
+    }
+
+    .medqueue-rating {
+      padding: 6px 9px;
+      border-radius: 8px;
+      background: var(--green-soft);
+      color: #557A69;
+      font-size: 11px;
+      font-weight: 800;
+    }
+
+    .medqueue-info {
+      border-color: #E5EEE9 !important;
+    }
+
+    .medqueue-free {
+      color: #3F8664 !important;
+    }
+
+    .medqueue-button {
+      margin-top: 16px;
+      display: flex;
+      width: 100%;
+      align-items: center;
+      justify-content: center;
+      padding: 12px 16px;
+      border-radius: 10px;
+      background: var(--green);
+      color: white;
+      font-size: 13px;
+      font-weight: 800;
+      text-decoration: none;
+      box-shadow: 0 7px 18px rgba(23, 107, 82, 0.20);
+      transition: 0.2s;
+    }
+
+    .medqueue-button:hover {
+      background: var(--green-dark);
+    }
+
+    @media (max-width: 420px) {
+      .medqueue-main {
+        padding-left: 14px;
+        padding-right: 14px;
+      }
+    }
+  </style>
+  
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: '#00738C',
+            brandLight: '#D6EAD4',
+            brandSoft: '#81B0B2',
+            brandDark: '#173A3F',
+            accent: '#91A675'
+          },
+          boxShadow: {
+            soft: '0 10px 30px rgba(23, 58, 63, 0.08)'
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    :root {
+      --mq-forest: #123F32;
+      --mq-green: #176B52;
+      --mq-green-light: #2E8065;
+      --mq-mint: #DCEFE6;
+      --mq-soft: #EEF7F2;
+      --mq-line: #DCE8E1;
+      --mq-shadow: 0 18px 45px rgba(18, 63, 50, .09);
+    }
+
+    body {
+      background:
+        radial-gradient(circle at 10% 0%, rgba(181, 207, 159, .28), transparent 30%),
+        radial-gradient(circle at 95% 20%, rgba(220, 239, 230, .7), transparent 28%),
+        #F5F7F2;
+      color: #173A3F;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    body > main {
+      box-shadow: 0 0 55px rgba(18, 63, 50, .07);
+    }
+
+    body > main > header > div:first-child > a > span:first-child {
+      width: 46px;
+      height: 46px;
+      border-radius: 15px;
+      background: var(--mq-forest);
+      box-shadow: 0 10px 22px rgba(18, 63, 50, .18);
+    }
+
+    body > main > header > div:first-child > a > span:last-child {
+      color: #173A3F;
+      font-size: 23px;
+      letter-spacing: -.7px;
+    }
+
+    body > main > header > div:first-child > a > span:last-child span {
+      color: var(--mq-green-light);
+    }
+
+    body > main > header > div:first-child > label select {
+      border: 1px solid var(--mq-line);
+      border-radius: 13px;
+      background: rgba(255, 255, 255, .72);
+      padding: 10px 28px 10px 12px;
+      color: #173A3F;
+    }
+
+    body > main > header > div:nth-child(2) {
+      margin-top: 22px;
+      gap: 12px;
+      border-color: var(--mq-line);
+      border-radius: 17px;
+      padding: 14px 16px;
+      box-shadow: 0 8px 25px rgba(18, 63, 50, .05);
+    }
+
+    body > main > header > div:nth-child(2) input {
+      font-size: 14px;
+    }
+
+    body > main > section[aria-labelledby="services-title"] > div:nth-child(2) {
+      margin-top: 14px;
+      gap: 8px;
+      padding: 8px;
+      border-color: var(--mq-line);
+      border-radius: 17px;
+      box-shadow: 0 8px 24px rgba(18, 63, 50, .04);
+    }
+
+    body > main > section[aria-labelledby="services-title"] button {
+      min-height: 42px;
+      border-radius: 12px;
+      transition: background-color .2s, color .2s, transform .2s;
+    }
+
+    body > main > section[aria-labelledby="services-title"] button:hover {
+      transform: translateY(-1px);
+    }
+
+    body > main > section[aria-labelledby="clinics-title"] {
+      margin-top: 30px;
+    }
+
+    body > main > section[aria-labelledby="clinics-title"] h2 {
+      font-size: 21px;
+      line-height: 1.25;
+      letter-spacing: -.35px;
+    }
+
+    body > main > section[aria-labelledby="clinics-title"] > div:last-child {
+      gap: 18px;
+      margin-top: 18px;
+    }
+
+    body > main article[data-clinic] {
+      overflow: hidden;
+      border-color: var(--mq-line);
+      border-radius: 26px;
+      box-shadow: var(--mq-shadow);
+      transition: transform .2s, box-shadow .2s;
+    }
+
+    body > main article[data-clinic]:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 22px 48px rgba(18, 63, 50, .13);
+    }
+
+   body > main article[data-clinic] > div:first-child:has(+ div) {
+  background-image:
+    radial-gradient(circle at 82% 22%, rgba(255, 255, 255, .82), transparent 27%),
+    linear-gradient(135deg, #CDE5D8, #EAF3DD 55%, #BFD8C8);
+
+  border-radius: 18px;
+}
+    body > main article[data-clinic] > div:nth-child(2) {
+      padding: 19px;
+    }
+
+    body > main article[data-clinic] a[href="clinic.html"] {
+      margin-top: 17px;
+      border-radius: 13px;
+      background: var(--mq-forest);
+      box-shadow: 0 10px 22px rgba(18, 63, 50, .16);
+    }
+
+    body > main article[data-clinic] a[href="clinic.html"]:hover {
+      background: #0D3228;
+      transform: translateY(-1px);
+    }
+
+    [class*="bg-[#00738C]"] { background-color: var(--mq-forest) !important; }
+    [class*="text-[#00738C]"] { color: var(--mq-green-light) !important; }
+    [class*="border-[#E1E9E4]"] { border-color: var(--mq-line) !important; }
+
+    @media (max-width: 380px) {
+      body > main > section[aria-labelledby="clinics-title"] h2 { font-size: 19px; }
+      body > main > section[aria-labelledby="services-title"] button { padding-left: 5px; padding-right: 5px; }
+    }
+  </style>
+</head>
+
+<body class="min-h-screen bg-[#F5F7F2] text-[#173A3F] antialiased">
+
+  <main class="mx-auto min-h-screen max-w-md bg-[#F5F7F2] px-4 pb-24">
+
+    <!-- HEADER -->
+    <header class="pt-6">
+
+      <div class="flex items-center justify-between">
+
+        <a
+          href="index.html"
+          class="flex items-center gap-2"
+          aria-label="MedQueue, на главную"
+        >
+          <span
+            class="flex h-9 w-9 items-center justify-center rounded-2xl bg-[#00738C] text-lg shadow-md"
+          >
+            🦷
+          </span>
+
+          <span class="text-xl font-bold tracking-tight">
+            Med<span class="text-[#00738C]">Queue</span>
+          </span>
+        </a>
+
+        <label class="relative text-xs font-semibold text-[#6F8580]">
+
+          <span class="sr-only">
+            Выберите город
+          </span>
+
+          <select
+            class="appearance-none bg-transparent pr-4 outline-none"
+            aria-label="Ваш город"
+          >
+            <option>Алматы</option>
+            <option>Астана</option>
+            <option>Шымкент</option>
+          </select>
+
+          <span class="pointer-events-none absolute right-0 top-0">
+            ⌄
+          </span>
+
+        </label>
+
+      </div>
+
+      <!-- SEARCH -->
+
+      <div
+        class="mt-5 flex items-center gap-3 rounded-xl border border-[#D6E2DC] bg-white px-3 py-2.5 text-[#81B0B2]"
+      >
+
+        <span class="text-lg" aria-hidden="true">
+          ⌕
+        </span>
+
+        <input
+          id="clinic-search"
+          type="search"
+          placeholder="Поиск стоматологии в Алматы"
+          class="min-w-0 flex-1 bg-transparent text-xs text-[#173A3F] outline-none placeholder:text-[#81B0B2]"
+        >
+
+      </div>
+
+    </header>
+
+
+    <!-- QUICK CHOICE -->
+
+    <section class="mt-6" aria-labelledby="services-title">
+
+      <div class="flex items-center justify-between">
+
+        <h1
+          id="services-title"
+          class="text-base font-bold text-[#173A3F]"
+        >
+          Быстрый выбор
+        </h1>
+
+      </div>
+
+      <div
+        class="mt-3 grid grid-cols-3 gap-2 rounded-xl border border-[#D6E2DC] bg-white p-2"
+      >
+
+        <button
+          type="button"
+          class="rounded-lg bg-[#00738C] px-2 py-2 text-[11px] font-semibold text-white"
+        >
+          Острая боль
+        </button>
+
+        <button
+          type="button"
+          class="rounded-lg px-2 py-2 text-[11px] font-semibold text-[#526D69] hover:bg-[#EEF2D8]"
+        >
+          Чистка
+        </button>
+
+        <button
+          type="button"
+          class="rounded-lg px-2 py-2 text-[11px] font-semibold text-[#526D69] hover:bg-[#EEF2D8]"
+        >
+          Кариес
+        </button>
+
+      </div>
+
+    </section>
+
+
+    <!-- CLINICS -->
+
+    <section class="mt-6" aria-labelledby="clinics-title">
+
+      <div class="flex items-end justify-between">
+
+        <div>
+
+          <p class="text-[11px] font-semibold text-[#91A675]">
+            ПОСЛЕ 18:00 · АЛМАТЫ
+          </p>
+
+          <h2
+            id="clinics-title"
+            class="mt-1 text-base font-bold text-[#173A3F]"
+          >
+            Нужен стоматолог сегодня?
+          </h2>
+
+        </div>
+
+        <span class="text-xs text-[#81B0B2]">
+          12 найдено
+        </span>
+
+      </div>
+
+
+      <div class="mt-4 space-y-4">
+
+        <!-- SMILE CLINIC -->
+
+        <article
+          data-clinic="smile clinic ул. достык алматы"
+          class="overflow-hidden rounded-2xl border border-[#E1E9E4] bg-white shadow-soft"
+        >
+
+          <div
+            class="h-32 bg-gradient-to-br from-[#D6EAD4] via-[#EEF2D8] to-[#D9ECE8] p-4"
+          >
+
+            <div class="flex justify-between">
+
+              <span
+                class="rounded-full bg-white/90 px-3 py-1 text-[11px] font-bold text-[#00738C]"
+              >
+                Открыто до 21:00
+              </span>
+
+            </div>
+
+          </div>
+
+
+          <div class="p-4">
+
+            <div class="flex items-start justify-between gap-3">
+
+              <div>
+
+                <h3 class="font-bold text-[#173A3F]">
+                  Smile Clinic
+                </h3>
+
+                <p class="mt-1 text-xs text-[#6F8580]">
+                  ул. Достык, 40 · 2.5 км
+                </p>
+
+              </div>
+
+              <div
+                class="flex items-center gap-1 rounded-lg bg-[#EEF2D8] px-2 py-1 text-xs font-bold text-[#788F5D]"
+              >
+                ★ 4.9
+              </div>
+
+            </div>
+
+
+            <div
+              class="mt-4 flex items-center justify-between border-t border-[#E7EEEA] pt-3"
+            >
+
+              <div>
+
+                <p class="text-[11px] text-[#91A09C]">
+                  Лечение от
+                </p>
+
+                <p class="mt-0.5 text-sm font-bold">
+                  8 000 ₸
+                </p>
+
+              </div>
+
+              <div class="text-right">
+
+                <p class="text-[11px] text-[#91A09C]">
+                  Сегодня свободно
+                </p>
+
+                <p class="mt-0.5 text-sm font-bold text-[#5F9B70]">
+                  6 окон
+                </p>
+
+              </div>
+
+            </div>
+
+
+            <a
+              href="clinic.html"
+              class="mt-4 flex w-full items-center justify-center rounded-xl bg-[#00738C] px-4 py-3 text-sm font-bold text-white shadow-lg shadow-[#81B0B2]/30 transition hover:bg-[#006477]"
+            >
+              Свободные слоты
+              <span class="ml-2">→</span>
+            </a>
+
+          </div>
+
+        </article>
+
+
+        <!-- DENTIS PLUS -->
+
+        <article
+          data-clinic="dentis plus проспект абая алматы"
+          class="rounded-2xl border border-[#E1E9E4] bg-white p-4 shadow-soft"
+        >
+
+          <div class="flex items-start justify-between">
+
+            <div>
+
+              <h3 class="font-bold">
+                Dentis Plus
+              </h3>
+
+              <p class="mt-1 text-xs text-[#6F8580]">
+                пр. Абая, 18 · 3.1 км
+              </p>
+
+            </div>
+
+            <span
+              class="rounded-lg bg-[#EEF2D8] px-2 py-1 text-xs font-bold text-[#788F5D]"
+            >
+              ★ 4.8
+            </span>
+
+          </div>
+
+
+          <div
+            class="mt-4 flex items-end justify-between border-t border-[#E7EEEA] pt-3"
+          >
+
+            <div>
+
+              <p class="text-[11px] text-[#91A09C]">
+                Лечение от
+              </p>
+
+              <p class="mt-0.5 text-sm font-bold">
+                7 500 ₸
+              </p>
+
+            </div>
+
+            <div class="text-right">
+
+              <p class="text-[11px] text-[#91A09C]">
+                Сегодня свободно
+              </p>
+
+              <p class="mt-0.5 text-sm font-bold text-[#5F9B70]">
+                3 окна
+              </p>
+
+            </div>
+
+          </div>
+
+        </article>
+
+
+        <!-- CITY DENTAL -->
+
+        <article
+          data-clinic="city dental жибек жолы алматы"
+          class="rounded-2xl border border-[#E1E9E4] bg-white p-4 shadow-soft"
+        >
+
+          <div class="flex items-start justify-between">
+
+            <div>
+
+              <h3 class="font-bold">
+                City Dental
+              </h3>
+
+              <p class="mt-1 text-xs text-[#6F8580]">
+                ул. Жибек Жолы, 67 · 4.8 км
+              </p>
+
+            </div>
+
+            <span
+              class="rounded-lg bg-[#EEF2D8] px-2 py-1 text-xs font-bold text-[#788F5D]"
+            >
+              ★ 4.7
+            </span>
+
+          </div>
+
+
+          <div
+            class="mt-4 flex items-end justify-between border-t border-[#E7EEEA] pt-3"
+          >
+
+            <div>
+
+              <p class="text-[11px] text-[#91A09C]">
+                Лечение от
+              </p>
+
+              <p class="mt-0.5 text-sm font-bold">
+                9 000 ₸
+              </p>
+
+            </div>
+
+            <div class="text-right">
+
+              <p class="text-[11px] text-[#91A09C]">
+                Сегодня свободно
+              </p>
+
+              <p class="mt-0.5 text-sm font-bold text-[#5F9B70]">
+                5 окон
+              </p>
+
+            </div>
+
+          </div>
+
+        </article>
+
+      </div>
+
+    </section>
+
+  </main>
+
+
+  <script>
+
+    const searchInput =
+      document.getElementById('clinic-search');
+
+    const clinicCards =
+      document.querySelectorAll('[data-clinic]');
+
+
+    searchInput.addEventListener('input', function () {
+
+      const query =
+        searchInput.value.trim().toLowerCase();
+
+      clinicCards.forEach(function (card) {
+
+        card.hidden =
+          query !== '' &&
+          !card.dataset.clinic.includes(query);
+
+      });
+
+    });
+
+  </script>
+
+</body>
+</html>
