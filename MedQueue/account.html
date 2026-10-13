@@ -44,7 +44,13 @@
   </nav>
   <script>
     const message=document.getElementById('message'), authView=document.getElementById('auth-view'), patientView=document.getElementById('patient-view'), loginForm=document.getElementById('login-form'), registerForm=document.getElementById('register-form');
-    async function api(path,options={}){const response=await fetch(path,{...options,headers:{'Content-Type':'application/json',...(options.headers||{})}});const data=await response.json();if(!response.ok)throw new Error(data.error||'Не удалось выполнить запрос');return data}
+    async function api(path,options={}){
+      const response=await fetch(path,{...options,headers:{'Content-Type':'application/json',...(options.headers||{})}});
+      const raw=await response.text();let data={};
+      if(raw){try{data=JSON.parse(raw)}catch{throw new Error(`Сервер вернул не JSON (HTTP ${response.status}). Проверьте журнал Render.`)}}
+      if(!response.ok)throw new Error(data.error||`Сервер вернул пустой ответ (HTTP ${response.status}). Проверьте журнал Render.`);
+      return data;
+    }
     function notice(text,bad=false){message.textContent=text;message.className=`mt-4 rounded-xl border p-3 text-sm ${bad?'border-rose-200 bg-rose-50 text-rose-700':'border-emerald-200 bg-emerald-50 text-emerald-800'}`}
     function goRole(user){if(user.role==='admin'){location.replace('site-admin.html');return}if(user.role==='clinic'){location.replace('admin.html');return}}
     async function showPatient(user){

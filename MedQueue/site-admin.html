@@ -27,7 +27,10 @@
   <script>
     async function api(path,options={}){
       const response=await fetch(path,{...options,headers:{'Content-Type':'application/json',...(options.headers||{})}});
-      const data=await response.json();if(!response.ok)throw new Error(data.error||'Запрос не выполнен');return data;
+      const raw=await response.text();let data={};
+      if(raw){try{data=JSON.parse(raw)}catch{throw new Error(`Сервер вернул не JSON (HTTP ${response.status}). Проверьте журнал Render.`)}}
+      if(!response.ok)throw new Error(data.error||`Сервер вернул пустой ответ (HTTP ${response.status}). Проверьте журнал Render.`);
+      return data;
     }
     const message=document.getElementById('message');
     let allClinics=[],allUsers=[];
