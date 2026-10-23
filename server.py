@@ -15,6 +15,8 @@ from datetime import date, datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Iterator
+from urllib.error import HTTPError
+from urllib.request import Request, urlopen
 from urllib.parse import parse_qs, unquote, urlsplit
 
 
@@ -26,6 +28,58 @@ HOST = "0.0.0.0"
 PORT = int(os.environ.get("PORT", "8000"))
 SESSION_COOKIE = "medqueue_session"
 SESSION_DAYS = 14
+RESEND_API_URL = "https://api.resend.com/emails"
+
+
+def send_email(to: str | None, subject: str, text: str) -> None:
+    """Send a transactional email when Resend is configured; email failures are non-fatal."""
+    api_key = os.environ.get("RESEND_API_KEY", "").strip()
+    sender = os.environ.get("RESEND_FROM", "").strip()
+    if not to or not to.strip():
+        return
+    if not api_key or not sender:
+        print("Email notification skipped: set RESEND_API_KEY and RESEND_FROM to enable it.")
+        return
+
+    try:
+        payload = json.dumps({"from": sender, "to": [to], "subject": subject, "text": text}).encode("utf-8")
+        request = Request(
+            RESEND_API_URL,
+            data=payload,
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            method="POST",
+        )
+        with urlopen(request, timeout=8) as response:
+            if response.status >= 300:
+                print(f"Email notification failed: Resend returned HTTP {response.status}.")
+    except Exception as error:
+        status = f"HTTP {error.code}" if isinstance(error, HTTPError) else type(error).__name__
+        print(f"Email notification failed ({status}); the appointment action was saved.")
+
+
+def appointment_email_details(
+    appointment_id: int,
+    clinic_name: str,
+    service: str,
+    appointment_date: str,
+    appointment_time: str,
+    doctor_name: str = "",
+    price: int | None = None,
+    clinic_address: str = "",
+) -> str:
+    readable_date = datetime.strptime(appointment_date, "%Y-%m-%d").strftime("%d.%m.%Y")
+    lines = [
+        f"Номер записи: MQ-{appointment_id:05d}",
+        f"Клиника: {clinic_name}",
+    ]
+    if clinic_address:
+        lines.append(f"Адрес: {clinic_address}")
+    lines.extend((f"Услуга: {service}", f"Дата: {readable_date}", f"Время: {appointment_time}"))
+    if doctor_name:
+        lines.append(f"Врач: {doctor_name}")
+    if price is not None:
+        lines.append(f"Стоимость: {price:,} ₸".replace(",", " "))
+    return "\n".join(lines)
 
 
 class ApiError(Exception):
@@ -43,6 +97,25 @@ def password_digest(password: str, salt: bytes | None = None) -> tuple[str, str]
 
 def digest_session(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def auth_token(account_id: int, purpose: str, hours: int = 24) -> str:
+    token = secrets.token_urlsafe(32)
+    with connect_db() as connection:
+        connection.execute("DELETE FROM auth_tokens WHERE account_id=? AND purpose=?", (account_id, purpose))
+        connection.execute("INSERT INTO auth_tokens VALUES (?,?,?,?)", (
+            digest_session(token), account_id, purpose,
+            (datetime.now(timezone.utc) + timedelta(hours=hours)).isoformat(),
+        ))
+    return token
+
+
+def public_url(handler: BaseHTTPRequestHandler, path: str) -> str:
+    base = os.environ.get("PUBLIC_BASE_URL", "").strip().rstrip("/")
+    if not base:
+        scheme = "https" if handler.headers.get("X-Forwarded-Proto", "").lower() == "https" else "http"
+        base = f"{scheme}://{handler.headers.get('Host', 'localhost')}"
+    return f"{base}/{path.lstrip('/')}"
 
 
 # Открываем отдельное соединение для каждого запроса и всегда закрываем его после ответа.
@@ -126,8 +199,18 @@ def initialize_database() -> None:
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 PRIMARY KEY (patient_id, clinic_name)
             );
+            CREATE TABLE IF NOT EXISTS auth_tokens (
+                token_hash TEXT PRIMARY KEY,
+                account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+                purpose TEXT NOT NULL CHECK (purpose IN ('verify_email','reset_password')),
+                expires_at TEXT NOT NULL
+            );
             """
         )
+
+        account_columns = {row["name"] for row in connection.execute("PRAGMA table_info(accounts)")}
+        if "email_verified" not in account_columns:
+            connection.execute("ALTER TABLE accounts ADD COLUMN email_verified INTEGER NOT NULL DEFAULT 1")
 
         slot_columns = {row["name"] for row in connection.execute("PRAGMA table_info(slots)")}
         if "owner_user_id" not in slot_columns:
@@ -258,6 +341,8 @@ class MedQueueHandler(BaseHTTPRequestHandler):
         account = self.current_account()
         if account is None:
             raise ApiError(401, "Войдите в аккаунт, чтобы продолжить")
+        if not account["email_verified"]:
+            raise ApiError(403, "Подтвердите адрес электронной почты")
         if role and account["role"] != role:
             raise ApiError(403, "У этого аккаунта нет доступа к разделу")
         if approved_clinic and account["clinic_status"] != "approved":
@@ -277,7 +362,7 @@ class MedQueueHandler(BaseHTTPRequestHandler):
             "id": account["id"], "name": account["name"], "email": account["email"],
             "phone": account["phone"], "role": account["role"],
             "clinic_name": account["clinic_name"], "clinic_address": account["clinic_address"],
-            "clinic_status": account["clinic_status"],
+            "clinic_status": account["clinic_status"], "email_verified": bool(account["email_verified"]),
         }
 
     def send_error_json(self, error: ApiError) -> None:
@@ -323,8 +408,8 @@ class MedQueueHandler(BaseHTTPRequestHandler):
             with connect_db() as connection:
                 cursor = connection.execute(
                     """INSERT INTO accounts
-                       (name,email,phone,password_salt,password_hash,role,clinic_name,clinic_address,clinic_status)
-                       VALUES (?,?,?,?,?,?,?,?,?)""",
+                       (name,email,phone,password_salt,password_hash,role,clinic_name,clinic_address,clinic_status,email_verified)
+                       VALUES (?,?,?,?,?,?,?,?,?,0)""",
                     (name, email, phone, salt, digest, role, clinic_name or None,
                      clinic_address or None, "pending" if role == "clinic" else None),
                 )
@@ -332,8 +417,10 @@ class MedQueueHandler(BaseHTTPRequestHandler):
                 account = connection.execute("SELECT * FROM accounts WHERE id=?", (account_id,)).fetchone()
         except sqlite3.IntegrityError as error:
             raise ApiError(409, "Аккаунт с такой почтой уже существует") from error
-        session = self.make_session(account_id)
-        self.send_json(201, self.account_record(account), session)
+        token = auth_token(account_id, "verify_email")
+        verify_url = public_url(self, f"api/auth/verify-email?token={token}")
+        send_email(email, "Подтвердите почту — MedQueue", f"Здравствуйте, {name}!\n\nПодтвердите адрес электронной почты по ссылке:\n{verify_url}\n\nСсылка действует 24 часа.")
+        self.send_json(201, {"verification_required": True, "email": email})
 
     def login(self) -> None:
         try:
@@ -346,10 +433,63 @@ class MedQueueHandler(BaseHTTPRequestHandler):
             account = connection.execute("SELECT * FROM accounts WHERE email=? COLLATE NOCASE", (email,)).fetchone()
         if account is None:
             raise ApiError(401, "Неверная почта или пароль")
+        if not account["email_verified"]:
+            raise ApiError(403, "Подтвердите почту по ссылке из письма, затем войдите снова")
         _, digest = password_digest(password, bytes.fromhex(account["password_salt"]))
         if not hmac.compare_digest(digest, account["password_hash"]):
             raise ApiError(401, "Неверная почта или пароль")
         self.send_json(200, self.account_record(account), self.make_session(account["id"]))
+
+    def request_verification(self) -> None:
+        try:
+            email = str(self.read_json().get("email", "")).strip().lower()
+        except ValueError as error:
+            raise ApiError(400, str(error)) from error
+        with connect_db() as connection:
+            account = connection.execute("SELECT id,name,email,email_verified FROM accounts WHERE email=? COLLATE NOCASE", (email,)).fetchone()
+        if account and not account["email_verified"]:
+            token = auth_token(account["id"], "verify_email")
+            link = public_url(self, f"api/auth/verify-email?token={token}")
+            send_email(account["email"], "Подтвердите почту — MedQueue", f"Здравствуйте, {account['name']}!\n\nПодтвердите почту:\n{link}\n\nСсылка действует 24 часа.")
+        self.send_json(200, {"sent": True})
+
+    def verify_email(self, token: str) -> None:
+        with connect_db() as connection:
+            row = connection.execute("SELECT account_id FROM auth_tokens WHERE token_hash=? AND purpose='verify_email' AND expires_at>?", (digest_session(token), datetime.now(timezone.utc).isoformat())).fetchone()
+            if row is None:
+                raise ApiError(400, "Ссылка недействительна или устарела. Запросите новое письмо.")
+            connection.execute("UPDATE accounts SET email_verified=1 WHERE id=?", (row["account_id"],))
+            connection.execute("DELETE FROM auth_tokens WHERE account_id=? AND purpose='verify_email'", (row["account_id"],))
+        self.send_response(302); self.send_header("Location", "/account.html?verified=1"); self.end_headers()
+
+    def request_password_reset(self) -> None:
+        try:
+            email = str(self.read_json().get("email", "")).strip().lower()
+        except ValueError as error:
+            raise ApiError(400, str(error)) from error
+        with connect_db() as connection:
+            account = connection.execute("SELECT id,name,email FROM accounts WHERE email=? COLLATE NOCASE", (email,)).fetchone()
+        if account:
+            token = auth_token(account["id"], "reset_password", 1)
+            link = public_url(self, f"account.html?reset={token}")
+            send_email(account["email"], "Сброс пароля — MedQueue", f"Здравствуйте, {account['name']}!\n\nЧтобы задать новый пароль, откройте ссылку:\n{link}\n\nСсылка действует 1 час. Если вы не запрашивали сброс, проигнорируйте письмо.")
+        self.send_json(200, {"sent": True})
+
+    def reset_password(self) -> None:
+        try:
+            data = self.read_json(); token = str(data.get("token", "")); password = str(data.get("password", ""))
+        except ValueError as error:
+            raise ApiError(400, str(error)) from error
+        if len(password) < 8 or len(password) > 256:
+            raise ApiError(400, "Пароль должен содержать от 8 до 256 символов")
+        with connect_db() as connection:
+            row = connection.execute("SELECT account_id FROM auth_tokens WHERE token_hash=? AND purpose='reset_password' AND expires_at>?", (digest_session(token), datetime.now(timezone.utc).isoformat())).fetchone()
+            if row is None: raise ApiError(400, "Ссылка недействительна или устарела. Запросите сброс пароля снова.")
+            salt, digest = password_digest(password)
+            connection.execute("UPDATE accounts SET password_salt=?,password_hash=? WHERE id=?", (salt,digest,row["account_id"]))
+            connection.execute("DELETE FROM sessions WHERE account_id=?", (row["account_id"],))
+            connection.execute("DELETE FROM auth_tokens WHERE account_id=? AND purpose='reset_password'", (row["account_id"],))
+        self.send_json(200, {"reset": True})
 
     def logout(self) -> None:
         account = self.current_account()
@@ -436,8 +576,11 @@ class MedQueueHandler(BaseHTTPRequestHandler):
         account = self.require_account("patient")
         with connect_db() as connection:
             row = connection.execute(
-                """SELECT a.id,a.status,s.appointment_date,s.appointment_time FROM appointments a
-                   JOIN slots s ON s.id=a.slot_id WHERE a.id=? AND a.patient_id=?""",
+                """SELECT a.id,a.status,s.appointment_date,s.appointment_time,s.clinic_name,
+                          s.service,s.doctor_name,c.email AS clinic_email,c.clinic_address
+                   FROM appointments a JOIN slots s ON s.id=a.slot_id
+                   LEFT JOIN accounts c ON c.id=s.owner_user_id AND c.role='clinic'
+                   WHERE a.id=? AND a.patient_id=?""",
                 (appointment_id, account["id"]),
             ).fetchone()
             if row is None:
@@ -451,6 +594,17 @@ class MedQueueHandler(BaseHTTPRequestHandler):
             if appointment_at <= datetime.now() + timedelta(hours=2):
                 raise ApiError(409, "Отменить запись можно не позднее чем за 2 часа до приёма")
             connection.execute("UPDATE appointments SET status='cancelled' WHERE id=?", (appointment_id,))
+        if row["clinic_email"]:
+            details = appointment_email_details(
+                row["id"], row["clinic_name"], row["service"], row["appointment_date"],
+                row["appointment_time"], row["doctor_name"], clinic_address=row["clinic_address"] or "",
+            )
+            message = (
+                "Здравствуйте!\n\nПациент отменил запись. Время снова доступно для записи.\n\n"
+                f"{details}\n\nПациент: {account['name']}\nТелефон: {account['phone']}\n"
+                f"Почта: {account['email']}\n\nMedQueue — сервис онлайн-записи к стоматологу."
+            )
+            send_email(row["clinic_email"], "Пациент отменил запись · MedQueue", message)
         self.send_json(200, {"cancelled": True})
 
     def reschedule_patient_appointment(self, appointment_id: int) -> None:
@@ -464,8 +618,11 @@ class MedQueueHandler(BaseHTTPRequestHandler):
         with connect_db() as connection:
             connection.execute("BEGIN IMMEDIATE")
             appointment = connection.execute(
-                """SELECT a.status,s.appointment_date,s.appointment_time FROM appointments a
-                   JOIN slots s ON s.id=a.slot_id WHERE a.id=? AND a.patient_id=?""",
+                """SELECT a.status,s.appointment_date,s.appointment_time,s.clinic_name,s.service,
+                          s.doctor_name,s.price,s.owner_user_id,c.email AS clinic_email,c.clinic_address
+                   FROM appointments a JOIN slots s ON s.id=a.slot_id
+                   LEFT JOIN accounts c ON c.id=s.owner_user_id
+                   WHERE a.id=? AND a.patient_id=?""",
                 (appointment_id, account["id"]),
             ).fetchone()
             if appointment is None:
@@ -486,7 +643,44 @@ class MedQueueHandler(BaseHTTPRequestHandler):
                                    (slot_id, appointment_id))
             except sqlite3.IntegrityError as error:
                 raise ApiError(409, "Это время уже занято") from error
+            updated = connection.execute("SELECT appointment_date,appointment_time,doctor_name FROM slots WHERE id=?", (slot_id,)).fetchone()
+        details = appointment_email_details(appointment_id, appointment["clinic_name"], appointment["service"], updated["appointment_date"], updated["appointment_time"], updated["doctor_name"], appointment["price"], appointment["clinic_address"] or "")
+        send_email(account["email"], "Время записи изменено · MedQueue", f"Здравствуйте, {account['name']}!\n\nВы перенесли запись.\n\n{details}")
+        if appointment["clinic_email"]:
+            send_email(appointment["clinic_email"], "Перенос записи · MedQueue", f"Пациент перенёс запись.\n\n{details}\n\nПациент: {account['name']}\nТелефон: {account['phone']}")
         self.send_json(200, {"rescheduled": True})
+
+    def update_clinic_profile(self) -> None:
+        account = self.require_account("clinic")
+        try:
+            data = self.read_json()
+            name = str(data.get("clinic_name", "")).strip()
+            address = str(data.get("clinic_address", "")).strip()
+            phone = str(data.get("phone", "")).strip()
+            email = str(data.get("email", "")).strip().lower()
+        except ValueError as error:
+            raise ApiError(400, str(error)) from error
+        if not 2 <= len(name) <= 160 or len(address) < 3 or len(address) > 240:
+            raise ApiError(400, "Проверьте название и адрес клиники")
+        if len(re.sub(r"\D", "", phone)) < 7 or len(phone) > 30:
+            raise ApiError(400, "Введите корректный телефон")
+        if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", email) or len(email) > 254:
+            raise ApiError(400, "Введите корректную почту")
+        changed_email = email != account["email"].lower()
+        try:
+            with connect_db() as connection:
+                connection.execute("UPDATE accounts SET clinic_name=?,clinic_address=?,phone=?,email=?,email_verified=? WHERE id=? AND role='clinic'", (name,address,phone,email,0 if changed_email else 1,account["id"]))
+                connection.execute("UPDATE slots SET clinic_name=? WHERE owner_user_id=?", (name,account["id"]))
+                if name != account["clinic_name"]:
+                    connection.execute("UPDATE favorites SET clinic_name=? WHERE clinic_name=? COLLATE NOCASE", (name,account["clinic_name"]))
+                fresh = connection.execute("SELECT * FROM accounts WHERE id=?", (account["id"],)).fetchone()
+        except sqlite3.IntegrityError as error:
+            raise ApiError(409, "Аккаунт с такой почтой уже существует") from error
+        if changed_email:
+            token=auth_token(account["id"],"verify_email")
+            link=public_url(self,f"api/auth/verify-email?token={token}")
+            send_email(email,"Подтвердите новую почту — MedQueue",f"Подтвердите новую почту клиники по ссылке:\n{link}\n\nСсылка действует 24 часа.")
+        self.send_json(200, self.account_record(fresh))
 
     def create_review(self, appointment_id: int) -> None:
         account = self.require_account("patient")
@@ -530,8 +724,11 @@ class MedQueueHandler(BaseHTTPRequestHandler):
         account = self.require_account("clinic", approved_clinic=True)
         with connect_db() as connection:
             row = connection.execute(
-                """SELECT a.id,a.status,s.appointment_date,s.appointment_time FROM appointments a
-                   JOIN slots s ON s.id=a.slot_id WHERE a.id=? AND s.owner_user_id=?""",
+                """SELECT a.id,a.status,a.patient_name,p.email AS patient_email,
+                          s.appointment_date,s.appointment_time,s.clinic_name,s.service,s.doctor_name
+                   FROM appointments a JOIN slots s ON s.id=a.slot_id
+                   LEFT JOIN accounts p ON p.id=a.patient_id
+                   WHERE a.id=? AND s.owner_user_id=?""",
                 (appointment_id, account["id"]),
             ).fetchone()
             if row is None:
@@ -543,6 +740,18 @@ class MedQueueHandler(BaseHTTPRequestHandler):
             if row["status"] not in {"pending", "confirmed"} or appointment_at <= datetime.now():
                 raise ApiError(409, "Эту запись уже нельзя отменить")
             connection.execute("UPDATE appointments SET status='cancelled' WHERE id=?", (appointment_id,))
+        if row["patient_email"]:
+            details = appointment_email_details(
+                row["id"], row["clinic_name"], row["service"], row["appointment_date"],
+                row["appointment_time"], row["doctor_name"], clinic_address=account["clinic_address"] or "",
+            )
+            message = (
+                f"Здравствуйте, {row['patient_name']}!\n\nКлиника сообщила, что не сможет принять вас "
+                "в это время. Пожалуйста, свяжитесь с клиникой, чтобы выбрать другое время.\n\n"
+                f"{details}\nТелефон клиники: {account['phone']}\n\n"
+                "Извините за неудобство.\nMedQueue — сервис онлайн-записи к стоматологу."
+            )
+            send_email(row["patient_email"], "Клиника отменила запись · MedQueue", message)
         self.send_json(200, {"cancelled": True})
 
     def get_clinic_slots(self, account_id: int) -> None:
@@ -708,7 +917,9 @@ class MedQueueHandler(BaseHTTPRequestHandler):
         parsed = urlsplit(self.path)
         path = parsed.path.rstrip("/") or "/"
         try:
-            if path == "/api/slots":
+            if path == "/api/auth/verify-email":
+                self.verify_email(parse_qs(parsed.query).get("token", [""])[0])
+            elif path == "/api/slots":
                 self.get_slots(parse_qs(parsed.query))
             elif path == "/api/clinics":
                 self.get_clinics()
@@ -766,6 +977,12 @@ class MedQueueHandler(BaseHTTPRequestHandler):
                 self.register_account()
             elif path == "/api/login":
                 self.login()
+            elif path == "/api/auth/verify-email":
+                self.request_verification()
+            elif path == "/api/auth/password-reset":
+                self.request_password_reset()
+            elif path == "/api/auth/password-reset/confirm":
+                self.reset_password()
             elif path == "/api/logout":
                 self.logout()
             elif path == "/api/slots":
@@ -783,6 +1000,16 @@ class MedQueueHandler(BaseHTTPRequestHandler):
                 self.decide_clinic()
             elif path == "/api/clinic/doctors":
                 self.save_clinic_doctor()
+            else:
+                self.send_json(404, {"error": "Маршрут не найден"})
+        except ApiError as error:
+            self.send_error_json(error)
+
+    def do_PUT(self) -> None:
+        path = urlsplit(self.path).path.rstrip("/")
+        try:
+            if path == "/api/clinic/profile":
+                self.update_clinic_profile()
             else:
                 self.send_json(404, {"error": "Маршрут не найден"})
         except ApiError as error:
@@ -1015,9 +1242,46 @@ class MedQueueHandler(BaseHTTPRequestHandler):
                     (slot_id, account["name"], account["phone"], account["id"]),
                 )
                 appointment_id = cursor.lastrowid
+                clinic_email = None
+                clinic_address = ""
+                if slot["owner_user_id"] is not None:
+                    clinic_account = connection.execute(
+                        "SELECT email,clinic_address FROM accounts WHERE id=? AND role='clinic' AND clinic_status='approved'",
+                        (slot["owner_user_id"],),
+                    ).fetchone()
+                    clinic_email = clinic_account["email"] if clinic_account else None
+                    clinic_address = clinic_account["clinic_address"] if clinic_account else ""
         except sqlite3.IntegrityError:
             self.send_json(409, {"error": "Это время уже заняли. Выберите другое."})
             return
+
+        details = appointment_email_details(
+            appointment_id,
+            slot["clinic_name"],
+            slot["service"],
+            slot["appointment_date"],
+            slot["appointment_time"],
+            slot["doctor_name"],
+            slot["price"],
+            clinic_address,
+        )
+        patient_message = (
+            f"Здравствуйте, {account['name']}!\n\nВы записаны на приём. Будем ждать вас в клинике.\n\n"
+            f"{details}\n\nЕсли планы изменятся, запись можно отменить в личном кабинете "
+            "не позднее чем за 2 часа до приёма.\n\nMedQueue — сервис онлайн-записи к стоматологу."
+        )
+        send_email(account["email"], "Ваша запись подтверждена · MedQueue", patient_message)
+        if clinic_email:
+            clinic_message = (
+                "Здравствуйте!\n\nВ вашей клинике появилась новая запись.\n\n"
+                f"{details}\n\nПациент: {account['name']}\nТелефон: {account['phone']}\n"
+                f"Почта: {account['email']}\n\nMedQueue — сервис онлайн-записи к стоматологу."
+            )
+            send_email(
+                clinic_email,
+                "Новая запись в вашей клинике · MedQueue",
+                clinic_message,
+            )
 
         self.send_json(
             201,

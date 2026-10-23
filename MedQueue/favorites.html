@@ -71,7 +71,16 @@
           const minPrice=prices.length?`${Math.min(...prices).toLocaleString('ru-RU')} ₸`:'нет цены';
           const nearest=own.length?`${new Intl.DateTimeFormat('ru-RU',{day:'numeric',month:'short'}).format(new Date(`${own[0].date}T12:00:00`))} в ${own[0].time}`:'свободного времени пока нет';
           stats.textContent=`Свободных слотов: ${own.length} · от ${minPrice} · ближайшее: ${nearest}`;
-          const footer=document.createElement('div');footer.className='mt-3 flex justify-end';
+          const footer=document.createElement('div');footer.className='mt-3 flex flex-wrap items-center justify-between gap-2';
+          const contactActions=document.createElement('div');contactActions.className='flex gap-2';
+          const phoneDigits=(clinic.phone||'').replace(/\D/g,'');
+          if(phoneDigits.length>=7){
+            const phoneNumber=(clinic.phone||'').trim().startsWith('+')?`+${phoneDigits}`:phoneDigits;
+            const call=document.createElement('a');call.className='rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50';call.textContent='Позвонить';call.href=`tel:${phoneNumber}`;call.setAttribute('aria-label',`Позвонить в ${clinic.name}`);
+            const sms=document.createElement('a');sms.className='rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50';sms.textContent='Написать SMS';sms.href=`sms:${phoneNumber}`;sms.setAttribute('aria-label',`Написать SMS в ${clinic.name}`);
+            contactActions.append(call,sms);
+          }
+          footer.append(contactActions);
           if(clinic.unlisted){
             const note=document.createElement('p');note.className='text-xs text-slate-500';note.textContent='Клиника сейчас не публикует расписание.';footer.append(note);
           }else{

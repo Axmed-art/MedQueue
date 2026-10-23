@@ -171,10 +171,20 @@
         [[price==='—'?price:`от ${price}`,'Стоимость'],[nearest,'Ближайшее время'],[String(own.length),'Свободных слотов']].forEach(([value,label])=>{
           const item=makeElement('div','');item.append(makeElement('p','clinic-stat-label',label),makeElement('p','clinic-stat-value',value));stats.append(item);
         });
-        const footer=makeElement('div','mt-4 flex items-center justify-end');
+        const footer=makeElement('div','mt-4 flex flex-wrap items-center justify-between gap-2');
+        const contactActions=makeElement('div','flex gap-2');
+        const phoneDigits=(clinic.phone||'').replace(/\D/g,'');
+        if(phoneDigits.length>=7){
+          const phoneNumber=(clinic.phone||'').trim().startsWith('+')?`+${phoneDigits}`:phoneDigits;
+          const call=makeElement('a','rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50','Позвонить');
+          call.href=`tel:${phoneNumber}`;call.setAttribute('aria-label',`Позвонить в ${clinic.name}`);
+          const sms=makeElement('a','rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50','Написать SMS');
+          sms.href=`sms:${phoneNumber}`;sms.setAttribute('aria-label',`Написать SMS в ${clinic.name}`);
+          contactActions.append(call,sms);
+        }
         const link=makeElement('a','clinic-action','Открыть расписание →');
         link.href=`clinic.html?clinic_name=${encodeURIComponent(clinic.name)}${service?`&service=${encodeURIComponent(service)}`:''}`;
-        footer.append(link);card.append(header,stats,footer);cards.append(card);
+        footer.append(contactActions,link);card.append(header,stats,footer);cards.append(card);
       });
     }
     buttons.forEach(button=>button.addEventListener('click',()=>{
