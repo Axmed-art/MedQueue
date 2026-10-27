@@ -55,6 +55,8 @@ def send_email(to: str | None, subject: str, text: str) -> None:
         with urlopen(request, timeout=8) as response:
             if response.status >= 300:
                 print(f"Email notification failed: Resend returned HTTP {response.status}.")
+            else:
+                print("Email notification accepted by Resend.")
     except Exception as error:
         status = f"HTTP {error.code}" if isinstance(error, HTTPError) else type(error).__name__
         print(f"Email notification failed ({status}); the appointment action was saved.")
@@ -482,9 +484,12 @@ class MedQueueHandler(BaseHTTPRequestHandler):
         with connect_db() as connection:
             account = connection.execute("SELECT id,name,email FROM accounts WHERE email=? COLLATE NOCASE", (email,)).fetchone()
         if account:
+            print("Password reset: matching account found; requesting email delivery.")
             token = auth_token(account["id"], "reset_password", 1)
             link = public_url(self, f"account.html?reset={token}")
             send_email(account["email"], "Сброс пароля — MedQueue", f"Здравствуйте, {account['name']}!\n\nЧтобы задать новый пароль, откройте ссылку:\n{link}\n\nСсылка действует 1 час. Если вы не запрашивали сброс, проигнорируйте письмо.")
+        else:
+            print("Password reset: no matching account; no email was sent.")
         self.send_json(200, {"sent": True})
 
     def reset_password(self) -> None:
