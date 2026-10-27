@@ -23,8 +23,10 @@ from urllib.parse import parse_qs, unquote, urlsplit
 # Пути заданы относительно этого файла, поэтому сервер можно запускать из любой папки.
 ROOT = Path(__file__).resolve().parent
 WEB_ROOT = ROOT / "MedQueue"
-UPLOAD_ROOT = WEB_ROOT / "uploads"
-DATABASE = ROOT / "medqueue.db"
+DATA_ROOT = Path(os.environ.get("MEDQUEUE_DATA_DIR", str(ROOT))).expanduser()
+DEFAULT_UPLOAD_ROOT = DATA_ROOT / "uploads" if os.environ.get("MEDQUEUE_DATA_DIR") else WEB_ROOT / "uploads"
+UPLOAD_ROOT = Path(os.environ.get("MEDQUEUE_UPLOAD_DIR", str(DEFAULT_UPLOAD_ROOT))).expanduser()
+DATABASE = Path(os.environ.get("MEDQUEUE_DATABASE_PATH", str(DATA_ROOT / "medqueue.db"))).expanduser()
 HOST = "0.0.0.0"
 PORT = int(os.environ.get("PORT", "8000"))
 SESSION_COOKIE = "medqueue_session"
@@ -139,6 +141,7 @@ def connect_db() -> Iterator[sqlite3.Connection]:
 
 # Создаём таблицы при запуске и добавляем поля для существующей базы.
 def initialize_database() -> None:
+    DATABASE.parent.mkdir(parents=True, exist_ok=True)
     with connect_db() as connection:
         connection.executescript(
             """
@@ -1375,8 +1378,14 @@ class MedQueueHandler(BaseHTTPRequestHandler):
     # Отдаём только файлы внутри папки MedQueue, не открывая доступ к остальному проекту.
     def serve_static(self, request_path: str) -> None:
         relative_path = "index.html" if request_path == "/" else unquote(request_path).lstrip("/")
-        file_path = (WEB_ROOT / relative_path).resolve()
-        if WEB_ROOT.resolve() not in file_path.parents or not file_path.is_file():
+        if relative_path.startswith("uploads/"):
+            upload_name = Path(relative_path.removeprefix("uploads/")).name
+            file_path = (UPLOAD_ROOT / upload_name).resolve()
+            allowed_root = UPLOAD_ROOT.resolve()
+        else:
+            file_path = (WEB_ROOT / relative_path).resolve()
+            allowed_root = WEB_ROOT.resolve()
+        if allowed_root not in file_path.parents or not file_path.is_file():
             self.send_error(404, "File not found")
             return
         content = file_path.read_bytes()

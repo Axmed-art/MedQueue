@@ -25,7 +25,20 @@ MedQueue — сайт для записи к стоматологу в Алма�
 - На странице клиники — выбор даты в расписании и отзывы пациентов.
 
 
-На сайте также пристутствует админ панель - логин admin@admin.com , пароль admin.
+На локальном сервере создаётся демонстрационный вход владельца: `admin@medqueue.local` / `MedQueue123!`. Перед публикацией задайте `SITE_ADMIN_EMAIL` и `SITE_ADMIN_PASSWORD`.
+
+## Развёртывание в Microsoft Azure
+
+Проект можно разместить в Azure App Service на Linux с Python 3.12. В App Service задайте команду запуска `bash startup.sh` и следующие переменные окружения:
+
+- `MEDQUEUE_DATA_DIR=/home/data` — постоянная папка для SQLite и фотографий.
+- `SITE_ADMIN_EMAIL` и `SITE_ADMIN_PASSWORD` — учётные данные владельца сайта; задайте их до первого запуска.
+- `PUBLIC_BASE_URL` — публичный HTTPS-адрес приложения.
+- `RESEND_API_KEY` и `RESEND_FROM` — необязательно, для email-уведомлений.
+
+Папка `/home` сохраняется между перезапусками Linux App Service. Для production с несколькими экземплярами перенесите данные в управляемую базу и объектное хранилище.
+
+В репозитории есть GitHub Actions workflow `.github/workflows/azure-deploy.yml`. В GitHub добавьте repository variable `AZURE_WEBAPP_NAME` и secret `AZURE_WEBAPP_PUBLISH_PROFILE` (скачайте publish profile в Azure Portal у созданного Web App). Workflow запускается при push в `main` или вручную через **Actions → Deploy MedQueue to Azure App Service → Run workflow**.
 
 ## Email-уведомления
 
