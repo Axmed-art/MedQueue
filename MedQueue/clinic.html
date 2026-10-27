@@ -29,7 +29,8 @@
 
     <!-- Краткая информация о клинике и специалисте перед выбором времени. -->
     <section class="mt-5 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-soft">
-      <img src="assets/dental-reception.jpg" alt="Интерьер стоматологической клиники" class="h-36 w-full object-cover">
+      <img id="clinic-cover-photo" src="assets/dental-reception.jpg" alt="Интерьер стоматологической клиники" class="h-36 w-full object-cover">
+      <div id="clinic-photo-gallery" class="hidden gap-2 overflow-x-auto px-4 pt-3"></div>
       <div class="p-4"><div class="flex items-start justify-between gap-3"><div><h2 id="selected-clinic-name" class="text-sm font-bold">Выберите клинику</h2><p id="selected-clinic-address" class="mt-1 text-xs text-slate-500"></p><a id="selected-clinic-phone" class="mt-2 inline-flex text-xs text-blue-700 hover:underline"></a></div><span class="rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-bold text-emerald-700">Онлайн-запись</span></div></div>
     </section>
 
@@ -222,6 +223,7 @@
         const clinic = clinics.find((item) => item.name.toLocaleLowerCase('ru') === clinicName.toLocaleLowerCase('ru'));
         document.getElementById('selected-clinic-name').textContent = clinic?.name || clinicName;
         document.getElementById('selected-clinic-address').textContent = clinic?.address || '';
+        if(clinic?.photos?.length){document.getElementById('clinic-cover-photo').src=clinic.photos[0];if(clinic.photos.length>1){const gallery=document.getElementById('clinic-photo-gallery');gallery.classList.remove('hidden');gallery.classList.add('flex');clinic.photos.forEach((url,index)=>{const image=document.createElement('img');image.src=url;image.alt=`Фотография клиники ${index+1}`;image.className='h-16 w-24 shrink-0 rounded-lg object-cover';image.onclick=()=>{document.getElementById('clinic-cover-photo').src=url};gallery.append(image)})}}
         const phoneLink=document.getElementById('selected-clinic-phone'); phoneLink.textContent=clinic?.phone||''; phoneLink.href=clinic?.phone?`tel:${clinic.phone.replace(/[^+\d]/g,'')}`:'';
         const reviewResponse = await fetch(`/api/reviews?clinic_name=${encodeURIComponent(clinic?.name || clinicName)}`);
         const reviews = await reviewResponse.json();

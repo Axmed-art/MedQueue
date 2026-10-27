@@ -23,6 +23,7 @@ from urllib.parse import parse_qs, unquote, urlsplit
 # Пути заданы относительно этого файла, поэтому сервер можно запускать из любой папки.
 ROOT = Path(__file__).resolve().parent
 WEB_ROOT = ROOT / "MedQueue"
+UPLOAD_ROOT = WEB_ROOT / "uploads"
 DATABASE = ROOT / "medqueue.db"
 HOST = "0.0.0.0"
 PORT = int(os.environ.get("PORT", "8000"))
@@ -173,6 +174,8 @@ def initialize_database() -> None:
                 role TEXT NOT NULL CHECK (role IN ('patient', 'clinic', 'admin')),
                 clinic_name TEXT,
                 clinic_address TEXT,
+                latitude REAL,
+                longitude REAL,
                 clinic_status TEXT,
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             );
@@ -185,6 +188,12 @@ def initialize_database() -> None:
                 experience INTEGER NOT NULL DEFAULT 0 CHECK (experience BETWEEN 0 AND 60),
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE (clinic_id, name)
+            );
+            CREATE TABLE IF NOT EXISTS clinic_photos (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                clinic_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+                filename TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             );
 
             CREATE TABLE IF NOT EXISTS sessions (
@@ -211,6 +220,10 @@ def initialize_database() -> None:
         account_columns = {row["name"] for row in connection.execute("PRAGMA table_info(accounts)")}
         if "email_verified" not in account_columns:
             connection.execute("ALTER TABLE accounts ADD COLUMN email_verified INTEGER NOT NULL DEFAULT 1")
+        if "latitude" not in account_columns:
+            connection.execute("ALTER TABLE accounts ADD COLUMN latitude REAL")
+        if "longitude" not in account_columns:
+            connection.execute("ALTER TABLE accounts ADD COLUMN longitude REAL")
 
         slot_columns = {row["name"] for row in connection.execute("PRAGMA table_info(slots)")}
         if "owner_user_id" not in slot_columns:
@@ -362,6 +375,7 @@ class MedQueueHandler(BaseHTTPRequestHandler):
             "id": account["id"], "name": account["name"], "email": account["email"],
             "phone": account["phone"], "role": account["role"],
             "clinic_name": account["clinic_name"], "clinic_address": account["clinic_address"],
+            "latitude": account["latitude"], "longitude": account["longitude"],
             "clinic_status": account["clinic_status"], "email_verified": bool(account["email_verified"]),
         }
 
@@ -669,7 +683,16 @@ class MedQueueHandler(BaseHTTPRequestHandler):
         changed_email = email != account["email"].lower()
         try:
             with connect_db() as connection:
-                connection.execute("UPDATE accounts SET clinic_name=?,clinic_address=?,phone=?,email=?,email_verified=? WHERE id=? AND role='clinic'", (name,address,phone,email,0 if changed_email else 1,account["id"]))
+                latitude = data.get("latitude")
+                longitude = data.get("longitude")
+                try:
+                    latitude = float(latitude) if latitude not in (None, "") else None
+                    longitude = float(longitude) if longitude not in (None, "") else None
+                except (TypeError, ValueError):
+                    raise ApiError(400, "Укажите корректные координаты")
+                if (latitude is None) != (longitude is None) or (latitude is not None and not (-90 <= latitude <= 90 and -180 <= longitude <= 180)):
+                    raise ApiError(400, "Укажите корректные координаты клиники")
+                connection.execute("UPDATE accounts SET clinic_name=?,clinic_address=?,phone=?,email=?,latitude=?,longitude=?,email_verified=? WHERE id=? AND role='clinic'", (name,address,phone,email,latitude,longitude,0 if changed_email else 1,account["id"]))
                 connection.execute("UPDATE slots SET clinic_name=? WHERE owner_user_id=?", (name,account["id"]))
                 if name != account["clinic_name"]:
                     connection.execute("UPDATE favorites SET clinic_name=? WHERE clinic_name=? COLLATE NOCASE", (name,account["clinic_name"]))
@@ -681,6 +704,47 @@ class MedQueueHandler(BaseHTTPRequestHandler):
             link=public_url(self,f"api/auth/verify-email?token={token}")
             send_email(email,"Подтвердите новую почту — MedQueue",f"Подтвердите новую почту клиники по ссылке:\n{link}\n\nСсылка действует 24 часа.")
         self.send_json(200, self.account_record(fresh))
+
+    def upload_clinic_photo(self) -> None:
+        account = self.require_account("clinic")
+        length = int(self.headers.get("Content-Length", "0"))
+        if length <= 0 or length > 8 * 1024 * 1024 + 65536:
+            raise ApiError(400, "Размер фотографии не должен превышать 8 МБ")
+        content_type = self.headers.get("Content-Type", "")
+        boundary_match = re.search(r"boundary=(?:\"([^\"]+)\"|([^;]+))", content_type)
+        if "multipart/form-data" not in content_type or not boundary_match:
+            raise ApiError(400, "Выберите файл фотографии")
+        boundary = (boundary_match.group(1) or boundary_match.group(2)).encode()
+        body = self.rfile.read(length)
+        file_data = None
+        original_name = "photo"
+        for part in body.split(b"--" + boundary):
+            headers, separator, data = part.partition(b"\r\n\r\n")
+            if not separator or b'name="photos"' not in headers:
+                continue
+            match = re.search(rb'filename="([^"]*)"', headers)
+            if match and match.group(1):
+                original_name = Path(match.group(1).decode("utf-8", "ignore")).name
+                file_data = data.removesuffix(b"\r\n")
+                break
+        signatures = {".jpg": lambda b: b.startswith(b"\xff\xd8\xff"), ".jpeg": lambda b: b.startswith(b"\xff\xd8\xff"), ".png": lambda b: b.startswith(b"\x89PNG\r\n\x1a\n"), ".webp": lambda b: len(b) > 12 and b.startswith(b"RIFF") and b[8:12] == b"WEBP"}
+        suffix = Path(original_name).suffix.lower()
+        if file_data is None or not file_data or len(file_data) > 8 * 1024 * 1024 or suffix not in signatures or not signatures[suffix](file_data):
+            raise ApiError(400, "Загрузите изображение JPG, PNG или WebP размером до 8 МБ")
+        filename = f"{account['id']}_{secrets.token_hex(16)}{suffix}"
+        UPLOAD_ROOT.mkdir(parents=True, exist_ok=True)
+        (UPLOAD_ROOT / filename).write_bytes(file_data)
+        try:
+            with connect_db() as connection:
+                connection.execute("INSERT INTO clinic_photos (clinic_id,filename) VALUES (?,?)", (account["id"], filename))
+                rows = connection.execute("SELECT id,filename FROM clinic_photos WHERE clinic_id=? ORDER BY id DESC", (account["id"],)).fetchall()
+                for old in rows[8:]:
+                    connection.execute("DELETE FROM clinic_photos WHERE id=?", (old["id"],))
+                    (UPLOAD_ROOT / old["filename"]).unlink(missing_ok=True)
+        except Exception:
+            (UPLOAD_ROOT / filename).unlink(missing_ok=True)
+            raise
+        self.send_json(201, {"photo": f"/uploads/{filename}"})
 
     def create_review(self, appointment_id: int) -> None:
         account = self.require_account("patient")
@@ -946,6 +1010,11 @@ class MedQueueHandler(BaseHTTPRequestHandler):
             elif path == "/api/clinic/profile":
                 account = self.require_account("clinic")
                 self.send_json(200, self.account_record(account))
+            elif path == "/api/clinic/photos":
+                account = self.require_account("clinic")
+                with connect_db() as connection:
+                    photos = connection.execute("SELECT id, '/uploads/' || filename AS url FROM clinic_photos WHERE clinic_id=? ORDER BY id DESC", (account["id"],)).fetchall()
+                self.send_json(200, [dict(photo) for photo in photos])
             elif path == "/api/clinic/doctors":
                 account = self.require_account("clinic", approved_clinic=True)
                 self.get_clinic_doctors(account["id"])
@@ -1000,6 +1069,8 @@ class MedQueueHandler(BaseHTTPRequestHandler):
                 self.decide_clinic()
             elif path == "/api/clinic/doctors":
                 self.save_clinic_doctor()
+            elif path == "/api/clinic/photos":
+                self.upload_clinic_photo()
             else:
                 self.send_json(404, {"error": "Маршрут не найден"})
         except ApiError as error:
@@ -1083,11 +1154,19 @@ class MedQueueHandler(BaseHTTPRequestHandler):
     def get_clinics(self) -> None:
         with connect_db() as connection:
             rows = connection.execute(
-                """SELECT id,clinic_name AS name,clinic_address AS address,phone
-                   FROM accounts WHERE role='clinic' AND clinic_status='approved'
-                   ORDER BY clinic_name COLLATE NOCASE"""
+                """SELECT a.id,a.clinic_name AS name,a.clinic_address AS address,a.phone,a.latitude,a.longitude,
+                          (SELECT '/uploads/' || p.filename FROM clinic_photos p WHERE p.clinic_id=a.id ORDER BY p.id DESC LIMIT 1) AS photo
+                   FROM accounts a WHERE a.role='clinic' AND a.clinic_status='approved'
+                   ORDER BY a.clinic_name COLLATE NOCASE"""
             ).fetchall()
-        self.send_json(200, [dict(row) for row in rows])
+            clinics = []
+            for row in rows:
+                clinic = dict(row)
+                clinic["photos"] = [photo["url"] for photo in connection.execute(
+                    "SELECT '/uploads/' || filename AS url FROM clinic_photos WHERE clinic_id=? ORDER BY id DESC", (row["id"],)
+                ).fetchall()]
+                clinics.append(clinic)
+        self.send_json(200, clinics)
 
     # По ID загружаем детали слота перед показом формы подтверждения.
     def get_slot(self, slot_id: int) -> None:
