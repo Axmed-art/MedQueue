@@ -49,7 +49,11 @@ def send_email(to: str | None, subject: str, text: str) -> None:
         request = Request(
             RESEND_API_URL,
             data=payload,
-            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+                "User-Agent": "MedQueue/1.0 (+https://med-queue.app)",
+            },
             method="POST",
         )
         with urlopen(request, timeout=8) as response:
