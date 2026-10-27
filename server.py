@@ -57,9 +57,19 @@ def send_email(to: str | None, subject: str, text: str) -> None:
                 print(f"Email notification failed: Resend returned HTTP {response.status}.")
             else:
                 print("Email notification accepted by Resend.")
+    except HTTPError as error:
+        try:
+            details = json.loads(error.read().decode("utf-8"))
+            error_name = str(details.get("name", ""))
+            message = str(details.get("message", ""))
+        except (UnicodeDecodeError, json.JSONDecodeError, AttributeError):
+            error_name, message = "", ""
+        message = re.sub(r"[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}", "[email]", message)
+        message = message.replace(api_key, "[redacted]")[:300]
+        reason = f", {error_name}: {message}" if error_name or message else ""
+        print(f"Email notification failed (HTTP {error.code}{reason}).", flush=True)
     except Exception as error:
-        status = f"HTTP {error.code}" if isinstance(error, HTTPError) else type(error).__name__
-        print(f"Email notification failed ({status}); the appointment action was saved.")
+        print(f"Email notification failed ({type(error).__name__}).", flush=True)
 
 
 def appointment_email_details(
