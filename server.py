@@ -227,6 +227,8 @@ def initialize_database() -> None:
             connection.execute("ALTER TABLE accounts ADD COLUMN latitude REAL")
         if "longitude" not in account_columns:
             connection.execute("ALTER TABLE accounts ADD COLUMN longitude REAL")
+        # Email verification is optional; existing accounts must remain usable too.
+        connection.execute("UPDATE accounts SET email_verified=1 WHERE email_verified=0")
 
         slot_columns = {row["name"] for row in connection.execute("PRAGMA table_info(slots)")}
         if "owner_user_id" not in slot_columns:
@@ -357,8 +359,6 @@ class MedQueueHandler(BaseHTTPRequestHandler):
         account = self.current_account()
         if account is None:
             raise ApiError(401, "Войдите в аккаунт, чтобы продолжить")
-        if not account["email_verified"]:
-            raise ApiError(403, "Подтвердите адрес электронной почты")
         if role and account["role"] != role:
             raise ApiError(403, "У этого аккаунта нет доступа к разделу")
         if approved_clinic and account["clinic_status"] != "approved":
@@ -426,7 +426,7 @@ class MedQueueHandler(BaseHTTPRequestHandler):
                 cursor = connection.execute(
                     """INSERT INTO accounts
                        (name,email,phone,password_salt,password_hash,role,clinic_name,clinic_address,clinic_status,email_verified)
-                       VALUES (?,?,?,?,?,?,?,?,?,0)""",
+                       VALUES (?,?,?,?,?,?,?,?,?,1)""",
                     (name, email, phone, salt, digest, role, clinic_name or None,
                      clinic_address or None, "pending" if role == "clinic" else None),
                 )
@@ -434,10 +434,7 @@ class MedQueueHandler(BaseHTTPRequestHandler):
                 account = connection.execute("SELECT * FROM accounts WHERE id=?", (account_id,)).fetchone()
         except sqlite3.IntegrityError as error:
             raise ApiError(409, "Аккаунт с такой почтой уже существует") from error
-        token = auth_token(account_id, "verify_email")
-        verify_url = public_url(self, f"api/auth/verify-email?token={token}")
-        send_email(email, "Подтвердите почту — MedQueue", f"Здравствуйте, {name}!\n\nПодтвердите адрес электронной почты по ссылке:\n{verify_url}\n\nСсылка действует 24 часа.")
-        self.send_json(201, {"verification_required": True, "email": email})
+        self.send_json(201, self.account_record(account), self.make_session(account_id))
 
     def login(self) -> None:
         try:
@@ -450,8 +447,6 @@ class MedQueueHandler(BaseHTTPRequestHandler):
             account = connection.execute("SELECT * FROM accounts WHERE email=? COLLATE NOCASE", (email,)).fetchone()
         if account is None:
             raise ApiError(401, "Неверная почта или пароль")
-        if not account["email_verified"]:
-            raise ApiError(403, "Подтвердите почту по ссылке из письма, затем войдите снова")
         _, digest = password_digest(password, bytes.fromhex(account["password_salt"]))
         if not hmac.compare_digest(digest, account["password_hash"]):
             raise ApiError(401, "Неверная почта или пароль")
@@ -683,7 +678,6 @@ class MedQueueHandler(BaseHTTPRequestHandler):
             raise ApiError(400, "Введите корректный телефон")
         if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", email) or len(email) > 254:
             raise ApiError(400, "Введите корректную почту")
-        changed_email = email != account["email"].lower()
         try:
             with connect_db() as connection:
                 latitude = data.get("latitude")
@@ -695,17 +689,13 @@ class MedQueueHandler(BaseHTTPRequestHandler):
                     raise ApiError(400, "Укажите корректные координаты")
                 if (latitude is None) != (longitude is None) or (latitude is not None and not (-90 <= latitude <= 90 and -180 <= longitude <= 180)):
                     raise ApiError(400, "Укажите корректные координаты клиники")
-                connection.execute("UPDATE accounts SET clinic_name=?,clinic_address=?,phone=?,email=?,latitude=?,longitude=?,email_verified=? WHERE id=? AND role='clinic'", (name,address,phone,email,latitude,longitude,0 if changed_email else 1,account["id"]))
+                connection.execute("UPDATE accounts SET clinic_name=?,clinic_address=?,phone=?,email=?,latitude=?,longitude=?,email_verified=1 WHERE id=? AND role='clinic'", (name,address,phone,email,latitude,longitude,account["id"]))
                 connection.execute("UPDATE slots SET clinic_name=? WHERE owner_user_id=?", (name,account["id"]))
                 if name != account["clinic_name"]:
                     connection.execute("UPDATE favorites SET clinic_name=? WHERE clinic_name=? COLLATE NOCASE", (name,account["clinic_name"]))
                 fresh = connection.execute("SELECT * FROM accounts WHERE id=?", (account["id"],)).fetchone()
         except sqlite3.IntegrityError as error:
             raise ApiError(409, "Аккаунт с такой почтой уже существует") from error
-        if changed_email:
-            token=auth_token(account["id"],"verify_email")
-            link=public_url(self,f"api/auth/verify-email?token={token}")
-            send_email(email,"Подтвердите новую почту — MedQueue",f"Подтвердите новую почту клиники по ссылке:\n{link}\n\nСсылка действует 24 часа.")
         self.send_json(200, self.account_record(fresh))
 
     def upload_clinic_photo(self) -> None:
