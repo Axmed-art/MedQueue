@@ -59,15 +59,15 @@ def send_email(to: str | None, subject: str, text: str) -> None:
                 print("Email notification accepted by Resend.")
     except HTTPError as error:
         try:
-            details = json.loads(error.read().decode("utf-8"))
-            error_name = str(details.get("name", ""))
-            message = str(details.get("message", ""))
-        except (UnicodeDecodeError, json.JSONDecodeError, AttributeError):
-            error_name, message = "", ""
+            message = error.read().decode("utf-8", errors="replace").strip()
+        except OSError:
+            message = ""
         message = re.sub(r"[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}", "[email]", message)
         message = message.replace(api_key, "[redacted]")[:300]
-        reason = f", {error_name}: {message}" if error_name or message else ""
-        print(f"Email notification failed (HTTP {error.code}{reason}).", flush=True)
+        message = re.sub(r"(?i)(reset=)[A-Za-z0-9_-]+", r"\1[redacted]", message)
+        key_fingerprint = hashlib.sha256(api_key.encode("utf-8")).hexdigest()[:8]
+        reason = f"; Resend response: {message}" if message else ""
+        print(f"Email notification failed (HTTP {error.code}{reason}; key fingerprint {key_fingerprint}).", flush=True)
     except Exception as error:
         print(f"Email notification failed ({type(error).__name__}).", flush=True)
 
