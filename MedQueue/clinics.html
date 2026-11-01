@@ -159,6 +159,7 @@
         details.append(makeElement('h3','',clinic.name));
         const contact=[clinic.address,clinic.phone].filter(Boolean).join(' · ');
         if(contact)details.append(makeElement('p','clinic-meta mt-1',contact));
+        if(clinic.accepts_kaspi_red||clinic.accepts_installments){const paymentBadges=makeElement('div','mt-2 flex flex-wrap gap-1.5');if(clinic.accepts_kaspi_red)paymentBadges.append(makeElement('span','rounded-full border border-red-200 bg-red-50 px-2.5 py-1 text-[10px] font-bold text-red-700','Kaspi Red'));if(clinic.accepts_installments)paymentBadges.append(makeElement('span','rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[10px] font-bold text-amber-800','Рассрочка'));details.append(paymentBadges)}
         const controls=makeElement('div','flex shrink-0 flex-col items-end gap-2');
         controls.append(makeElement('span','text-[11px] font-medium text-slate-500',own.length?`Свободно: ${own.length}`:'Нет свободного времени'));
         if(!currentUser||currentUser.role==='patient'){

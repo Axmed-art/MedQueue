@@ -194,6 +194,8 @@ def initialize_database() -> None:
                 clinic_name TEXT,
                 clinic_address TEXT,
                 map_url TEXT NOT NULL DEFAULT '',
+                accepts_kaspi_red INTEGER NOT NULL DEFAULT 0,
+                accepts_installments INTEGER NOT NULL DEFAULT 0,
                 latitude REAL,
                 longitude REAL,
                 clinic_status TEXT,
@@ -244,6 +246,10 @@ def initialize_database() -> None:
             connection.execute("ALTER TABLE accounts ADD COLUMN latitude REAL")
         if "map_url" not in account_columns:
             connection.execute("ALTER TABLE accounts ADD COLUMN map_url TEXT NOT NULL DEFAULT ''")
+        if "accepts_kaspi_red" not in account_columns:
+            connection.execute("ALTER TABLE accounts ADD COLUMN accepts_kaspi_red INTEGER NOT NULL DEFAULT 0")
+        if "accepts_installments" not in account_columns:
+            connection.execute("ALTER TABLE accounts ADD COLUMN accepts_installments INTEGER NOT NULL DEFAULT 0")
         if "longitude" not in account_columns:
             connection.execute("ALTER TABLE accounts ADD COLUMN longitude REAL")
         # Email verification is optional; existing accounts must remain usable too.
@@ -398,6 +404,8 @@ class MedQueueHandler(BaseHTTPRequestHandler):
             "phone": account["phone"], "role": account["role"],
             "clinic_name": account["clinic_name"], "clinic_address": account["clinic_address"],
             "map_url": account["map_url"],
+            "accepts_kaspi_red": bool(account["accepts_kaspi_red"]),
+            "accepts_installments": bool(account["accepts_installments"]),
             "latitude": account["latitude"], "longitude": account["longitude"],
             "clinic_status": account["clinic_status"], "email_verified": bool(account["email_verified"]),
         }
@@ -694,6 +702,8 @@ class MedQueueHandler(BaseHTTPRequestHandler):
             phone = str(data.get("phone", "")).strip()
             email = str(data.get("email", "")).strip().lower()
             map_url = str(data.get("map_url", "")).strip()
+            accepts_kaspi_red = data.get("accepts_kaspi_red") in (True, 1, "1", "true", "on")
+            accepts_installments = data.get("accepts_installments") in (True, 1, "1", "true", "on")
         except ValueError as error:
             raise ApiError(400, str(error)) from error
         if not 2 <= len(name) <= 160 or len(address) < 3 or len(address) > 240:
@@ -718,7 +728,7 @@ class MedQueueHandler(BaseHTTPRequestHandler):
                     raise ApiError(400, "Укажите корректные координаты")
                 if (latitude is None) != (longitude is None) or (latitude is not None and not (-90 <= latitude <= 90 and -180 <= longitude <= 180)):
                     raise ApiError(400, "Укажите корректные координаты клиники")
-                connection.execute("UPDATE accounts SET clinic_name=?,clinic_address=?,phone=?,email=?,map_url=?,latitude=?,longitude=?,email_verified=1 WHERE id=? AND role='clinic'", (name,address,phone,email,map_url,latitude,longitude,account["id"]))
+                connection.execute("UPDATE accounts SET clinic_name=?,clinic_address=?,phone=?,email=?,map_url=?,accepts_kaspi_red=?,accepts_installments=?,latitude=?,longitude=?,email_verified=1 WHERE id=? AND role='clinic'", (name,address,phone,email,map_url,int(accepts_kaspi_red),int(accepts_installments),latitude,longitude,account["id"]))
                 connection.execute("UPDATE slots SET clinic_name=? WHERE owner_user_id=?", (name,account["id"]))
                 if name != account["clinic_name"]:
                     connection.execute("UPDATE favorites SET clinic_name=? WHERE clinic_name=? COLLATE NOCASE", (name,account["clinic_name"]))
@@ -1176,7 +1186,8 @@ class MedQueueHandler(BaseHTTPRequestHandler):
     def get_clinics(self) -> None:
         with connect_db() as connection:
             rows = connection.execute(
-                """SELECT a.id,a.clinic_name AS name,a.clinic_address AS address,a.phone,a.map_url,a.latitude,a.longitude,
+                """SELECT a.id,a.clinic_name AS name,a.clinic_address AS address,a.phone,a.map_url,
+                          a.accepts_kaspi_red,a.accepts_installments,a.latitude,a.longitude,
                           (SELECT '/uploads/' || p.filename FROM clinic_photos p WHERE p.clinic_id=a.id ORDER BY p.id DESC LIMIT 1) AS photo
                    FROM accounts a WHERE a.role='clinic' AND a.clinic_status='approved'
                    ORDER BY a.clinic_name COLLATE NOCASE"""
