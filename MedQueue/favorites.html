@@ -42,6 +42,7 @@
       if(linkText){const link=document.createElement('a');link.href=linkHref;link.className='font-semibold text-blue-700 underline';link.textContent=linkText;message.append(link)}
       message.classList.remove('hidden');
     }
+    function twoGisUrl(clinic){return clinic.map_url||`https://2gis.kz/almaty/search/${encodeURIComponent([clinic.name,clinic.address].filter(Boolean).join(' '))}`}
     async function load(){
       try{
         const user=await api('/api/me');
@@ -81,6 +82,7 @@
             contactActions.append(call,sms);
           }
           footer.append(contactActions);
+          const mapLink=document.createElement('a');mapLink.className='inline-flex min-h-10 items-center justify-center rounded-lg bg-emerald-600 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-700';mapLink.textContent='Открыть в 2ГИС ↗';mapLink.href=twoGisUrl(clinic);mapLink.target='_blank';mapLink.rel='noopener noreferrer';mapLink.setAttribute('aria-label',`Открыть ${clinic.name} в 2ГИС`);footer.append(mapLink);
           if(clinic.unlisted){
             const note=document.createElement('p');note.className='text-xs text-slate-500';note.textContent='Клиника сейчас не публикует расписание.';footer.append(note);
           }else{

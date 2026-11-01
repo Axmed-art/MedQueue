@@ -132,6 +132,7 @@
     let dateFilter='';
 
     function makeElement(tag,className,text){const node=document.createElement(tag);node.className=className;if(text)node.textContent=text;return node}
+    function twoGisUrl(clinic){return clinic.map_url||`https://2gis.kz/almaty/search/${encodeURIComponent([clinic.name,clinic.address].filter(Boolean).join(' '))}`}
     function render(){
       const query=search.value.trim().toLocaleLowerCase('ru');
       const now=new Date();const today=new Date(now.getFullYear(),now.getMonth(),now.getDate());const limit=new Date(today);limit.setDate(limit.getDate()+(dateFilter==='today'?1:3));
@@ -201,7 +202,8 @@
         }
         const link=makeElement('a','clinic-action','Открыть расписание →');
         link.href=`clinic.html?clinic_name=${encodeURIComponent(clinic.name)}${service?`&service=${encodeURIComponent(service)}`:''}`;
-        footer.append(contactActions,link);card.append(header,stats,footer);cards.append(card);
+        const mapLink=makeElement('a','inline-flex min-h-10 items-center justify-center rounded-lg bg-emerald-600 px-3 py-2 text-xs font-bold text-white transition hover:bg-emerald-700','Открыть в 2ГИС ↗');mapLink.href=twoGisUrl(clinic);mapLink.target='_blank';mapLink.rel='noopener noreferrer';mapLink.setAttribute('aria-label',`Открыть ${clinic.name} в 2ГИС`);
+        footer.append(contactActions,mapLink,link);card.append(header,stats,footer);cards.append(card);
       });
     }
     buttons.forEach(button=>button.addEventListener('click',()=>{
