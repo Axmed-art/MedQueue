@@ -238,6 +238,9 @@ def initialize_database() -> None:
             );
             """
         )
+        account_columns = {row["name"] for row in connection.execute("PRAGMA table_info(accounts)")}
+        if "last_login_at" not in account_columns:
+            connection.execute("ALTER TABLE accounts ADD COLUMN last_login_at TEXT")
 
         account_columns = {row["name"] for row in connection.execute("PRAGMA table_info(accounts)")}
         if "email_verified" not in account_columns:
@@ -478,6 +481,10 @@ class MedQueueHandler(BaseHTTPRequestHandler):
         _, digest = password_digest(password, bytes.fromhex(account["password_salt"]))
         if not hmac.compare_digest(digest, account["password_hash"]):
             raise ApiError(401, "Неверная почта или пароль")
+        with connect_db() as connection:
+            connection.execute(
+                "UPDATE accounts SET last_login_at=CURRENT_TIMESTAMP WHERE id=?", (account["id"],)
+            )
         self.send_json(200, self.account_record(account), self.make_session(account["id"]))
 
     def request_verification(self) -> None:
@@ -888,7 +895,7 @@ class MedQueueHandler(BaseHTTPRequestHandler):
     def get_admin_users(self) -> None:
         with connect_db() as connection:
             rows = connection.execute(
-                "SELECT id,name,email,phone,role,clinic_name,clinic_status,created_at FROM accounts ORDER BY created_at DESC"
+                "SELECT id,name,email,phone,role,clinic_name,clinic_status,created_at,last_login_at FROM accounts ORDER BY created_at DESC"
             ).fetchall()
         self.send_json(200, [dict(row) for row in rows])
 
